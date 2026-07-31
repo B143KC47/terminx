@@ -1,0 +1,48 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "terminx"
+version = "0.1.0"
+description = "Terminal dashboard for your CLI coding agents — Codex, OpenCode, Claude Code, Kimi in one view"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "BlackC4T" }]
+keywords = [
+    "cli",
+    "terminal",
+    "tui",
+    "dashboard",
+    "codex",
+    "claude-code",
+    "opencode",
+    "kimi",
+    "ai-agents",
+    "monitoring",
+    "quota",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: Microsoft :: Windows",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Terminals",
+    "Topic :: Utilities",
+]
+dependencies = ["rich>=13.0"]
+
+[project.scripts]
+terminx = "terminx.__main__:main"
+
+[tool.setuptools.packages.find]
+include = ["terminx*"]
+
+[tool.setuptools.package-data]
+terminx = ["config.example.json"]

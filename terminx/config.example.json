@@ -1,0 +1,11 @@
+{
+  "refresh_sec": 3,
+  "working_threshold_sec": 60,
+  "blocked_threshold_sec": 600,
+  "show_recent_hours": 24,
+  "max_rows_per_agent": 6,
+  "paths": {},
+  "kimi_api_key": "",
+  "codex_usage_url": "https://chatgpt.com/backend-api",
+  "kimi_usage_url": "https://api.kimi.com/coding/v1"
+}
