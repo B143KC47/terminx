@@ -109,8 +109,10 @@ def pid_cwd_matches(pid: int | None, cwd: str | None) -> bool:
         return False
     import psutil
 
+    from .processes import normalize_path
+
     try:
-        return (psutil.Process(pid).cwd() or "").lower().rstrip("\\/") == cwd.lower().rstrip("\\/")
+        return normalize_path(psutil.Process(pid).cwd() or "") == normalize_path(cwd)
     except Exception:
         return False
 

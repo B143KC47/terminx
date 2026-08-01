@@ -57,5 +57,22 @@ class OpenCodeSortTest(unittest.TestCase):
             self.assertEqual(len(rows), 2)
 
 
+class NormalizePathTest(unittest.TestCase):
+    """pid↔cwd matching must treat C:/foo (session files) and C:\\foo (psutil) as equal."""
+
+    def test_separators_and_case(self):
+        from terminx.core.processes import normalize_path
+
+        self.assertEqual(
+            normalize_path("C:/Users/ko202/Desktop/project"),
+            normalize_path("c:\\Users\\ko202\\Desktop\\project"),
+        )
+
+    def test_trailing_separator(self):
+        from terminx.core.processes import normalize_path
+
+        self.assertEqual(normalize_path("C:/foo/"), normalize_path("C:\\foo"))
+
+
 if __name__ == "__main__":
     unittest.main()

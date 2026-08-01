@@ -3,7 +3,7 @@ import re
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from ..core.processes import running_pids_with_cwd
+from ..core.processes import running_pids_with_cwd, normalize_path
 from ..core.usage import (
     UsageRecord,
     cached_json_parse,
@@ -26,9 +26,9 @@ class CodexAdapter(AgentAdapter):
         if not s.cwd:
             return None
         procs = running_pids_with_cwd(["codex", "codex.exe", "codex-code-mode-host", "codex-code-mode-host.exe"])
-        target = s.cwd.lower().rstrip("\\/")
+        target = normalize_path(s.cwd)
         for pid, cwd in procs.items():
-            if cwd.lower().rstrip("\\/") == target:
+            if normalize_path(cwd) == target:
                 return pid
         return None
 

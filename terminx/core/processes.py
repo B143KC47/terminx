@@ -2,6 +2,14 @@ import subprocess
 import time
 
 
+def normalize_path(p: str) -> str:
+    """Case- and separator-insensitive path key for cwd comparisons (Windows).
+
+    Session files may store ``C:/foo`` while psutil reports ``C:\\foo``.
+    """
+    return p.lower().replace("/", "\\").rstrip("\\")
+
+
 _snapshot: list[tuple[int, str]] = []
 _snapshot_at = 0.0
 _TTL = 3.0
