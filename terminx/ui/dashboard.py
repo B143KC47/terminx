@@ -19,7 +19,7 @@ from ..config import load_config
 from ..core.gitutil import git_branch
 from ..core.state import load_state, save_state
 from ..core.usage import utcnow
-from ..i18n import t
+from ..i18n import set_language, t
 from .colors import agent_color, cycle_color
 
 STATUS_STYLE = {
@@ -66,10 +66,17 @@ def _find_wt() -> str | None:
     return shutil.which("wt") or shutil.which("wt.exe")
 
 
+def _label(key: str, width: int = 12) -> str:
+    """Translate a ``key:``-style label and pad to a fixed display width (CJK-aware)."""
+    label = t(key)
+    return label + " " * max(1, width - Text(label).cell_len)
+
+
 class Dashboard:
     def __init__(self, adapters: list[AgentAdapter], cfg: dict):
         self.adapters = adapters
         self.cfg = cfg
+        set_language(cfg.get("lang", "auto"))
         self.console = Console()
         self.view = "terminals"
         self.cursor = 0
@@ -248,22 +255,22 @@ class Dashboard:
 
     def _session_detail_panel(self, s: SessionInfo) -> Panel:
         lines = [
-            f"{t('agent:')}      [bold]{s.agent}[/]",
-            f"{t('status:')}     {t(STATUS_STYLE.get(s.status, ('white', s.status))[1])}"
+            f"{_label('agent:')}[bold]{s.agent}[/]",
+            f"{_label('status:')}{t(STATUS_STYLE.get(s.status, ('white', s.status))[1])}"
             + (f" ({s.detail})" if s.detail else ""),
-            f"{t('model:')}      {s.model or '—'}",
-            f"{t('provider:')}   {s.provider or '—'}",
-            f"{t('directory:')}  {s.cwd or '—'}",
-            f"{t('branch:')}     {s.branch or '—'}",
-            f"{t('pid:')}        {s.pid or '—'}",
+            f"{_label('model:')}{s.model or '—'}",
+            f"{_label('provider:')}{s.provider or '—'}",
+            f"{_label('directory:')}{s.cwd or '—'}",
+            f"{_label('branch:')}{s.branch or '—'}",
+            f"{_label('pid:')}{s.pid or '—'}",
         ]
         if s.last_activity:
             age = (utcnow() - s.last_activity).total_seconds()
             lines.append(t("last act: {age} min ago", age=f"{age / 60:.1f}"))
-        lines.append(f"{t('session:')}    {s.source or '—'}")
+        lines.append(f"{_label('session:')}{s.source or '—'}")
         note = self._notes.get(self._note_key_for(s))
         if note:
-            lines.append(f"{t('note:')}       {note}")
+            lines.append(f"{_label('note:')}{note}")
         return Panel(
             "\n".join(lines),
             title=t("session detail"),
@@ -329,18 +336,18 @@ class Dashboard:
 
     def _usage_detail_panel(self, row: dict) -> Panel:
         quota = row.get("quota")
-        lines = [f"{t('agent:')}      [bold]{row['agent']}[/]"]
+        lines = [f"{_label('agent:')}[bold]{row['agent']}[/]"]
         if quota:
-            lines.append(f"{t('provider:')}   {quota.provider}")
+            lines.append(f"{_label('provider:')}{quota.provider}")
             if quota.plan:
-                lines.append(f"{t('plan:')}       {quota.plan}")
+                lines.append(f"{_label('plan:')}{quota.plan}")
             for w in quota.windows:
                 line = f"{t(w.label):>10}:  {_limit_status(w.pct).plain}"
                 if w.countdown:
                     line += f"  · {w.countdown}"
                 lines.append(line)
         else:
-            lines.append(f"{t('provider:')}   {t('no official subscription quota available')}")
+            lines.append(f"{_label('provider:')}{t('no official subscription quota available')}")
         return Panel(
             "\n".join(lines),
             title=t("quota breakdown"),

@@ -18,7 +18,6 @@
   "scanning…": "扫描中…",
   "scan: {time}": "扫描: {time}",
   "refresh {sec}s": "刷新 {sec} 秒",
-  "termiX — {title}  {summary}": "termiX — {title}  {summary}",
   "[bold]termiX[/] — {title}  {summary}": "[bold]termiX[/] — {title}  {summary}",
 
   "scanning for running agents…": "正在扫描运行中的代理…",
@@ -46,6 +45,7 @@
   "directory:": "目录:",
   "branch:": "分支:",
   "pid:": "PID:",
+  "plan:": "套餐:",
   "last act: {age} min ago": "最近活动: {age} 分钟前",
   "session:": "会话:",
   "note:": "笔记:",
@@ -74,6 +74,7 @@
   "no live process in dir": "目录中没有活动的进程",
   "waiting {age}s": "等待 {age} 秒",
   "idle {age}s": "{age} 秒",
+  "detached {hash}": "游离 {hash}",
   "awaiting reply": "等待回复",
   "permission prompt": "权限询问",
 

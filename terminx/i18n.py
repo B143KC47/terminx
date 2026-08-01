@@ -24,16 +24,19 @@ _lang = "en"
 
 
 def detect_language() -> str:
-    """Best-effort detection: ``LANG``-style env vars win, then system locale."""
+    """Best-effort detection: ``LANG``-style env vars win, then Windows UI language."""
     for var in ("LANG", "LC_ALL", "LC_MESSAGES"):
         env = os.environ.get(var)
         if env:
             code = env.split(".")[0].split("@")[0].replace("-", "_").lower()
             return "zh_CN" if code.startswith("zh") else "en"
-    if _locale is not None:
+    if os.name == "nt":
         try:
-            code = _locale.getdefaultlocale()[0] or ""
-        except (ValueError, TypeError):
+            import ctypes
+
+            lcid = ctypes.windll.kernel32.GetUserDefaultUILanguage()
+            code = (_locale.windows_locale.get(lcid) or "") if _locale else ""
+        except Exception:
             code = ""
         if code.lower().startswith("zh"):
             return "zh_CN"

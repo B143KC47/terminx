@@ -1,5 +1,7 @@
 from pathlib import Path
 
+from ..i18n import t
+
 
 def git_branch(cwd: Path | None) -> str | None:
     if not cwd or not cwd.exists():
@@ -11,7 +13,7 @@ def git_branch(cwd: Path | None) -> str | None:
             if text.startswith("ref: refs/heads/"):
                 return text.removeprefix("ref: refs/heads/")
             if len(text) == 40:
-                return f"detached {text[:8]}"
+                return t("detached {hash}", hash=text[:8])
             return None
         gitfile = cwd / ".git"
         if gitfile.is_file():

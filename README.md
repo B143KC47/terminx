@@ -208,6 +208,7 @@ Key design points:
 ```powershell
 pip install -e . pyflakes
 python -m pyflakes terminx   # lint
+python -m unittest discover -s tests   # i18n sanity tests
 python -m terminx --once     # smoke test
 ```
 
