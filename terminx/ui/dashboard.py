@@ -10,6 +10,7 @@ from pathlib import Path
 from rich import box
 from rich.console import Console, Group
 from rich.live import Live
+from rich.markup import escape
 from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
@@ -230,14 +231,17 @@ class Dashboard:
         parts: list = [header, table, footer]
         if self._note_edit is not None and rows:
             s = rows[self.cursor]
-            prompt = t(
-                "✎ note for [bold]{agent}[/] ({cwd}): ",
-                agent=s.agent,
-                cwd=s.cwd or "—",
-            ) + self._note_edit + "▌"
+            prompt = Text.from_markup(
+                t(
+                    "✎ note for [bold]{agent}[/] ({cwd}): ",
+                    agent=escape(s.agent),
+                    cwd=escape(s.cwd or "—"),
+                )
+            )
+            prompt.append(self._note_edit + "▌")
             parts.append(
                 Panel(
-                    Text.from_markup(prompt),
+                    prompt,
                     title=t("enter note"),
                     border_style="yellow",
                     subtitle=t("Enter save · Esc cancel"),
@@ -255,22 +259,22 @@ class Dashboard:
 
     def _session_detail_panel(self, s: SessionInfo) -> Panel:
         lines = [
-            f"{_label('agent:')}[bold]{s.agent}[/]",
+            f"{_label('agent:')}[bold]{escape(s.agent)}[/]",
             f"{_label('status:')}{t(STATUS_STYLE.get(s.status, ('white', s.status))[1])}"
-            + (f" ({s.detail})" if s.detail else ""),
-            f"{_label('model:')}{s.model or '—'}",
-            f"{_label('provider:')}{s.provider or '—'}",
-            f"{_label('directory:')}{s.cwd or '—'}",
-            f"{_label('branch:')}{s.branch or '—'}",
+            + (f" ({escape(s.detail)})" if s.detail else ""),
+            f"{_label('model:')}{escape(s.model) if s.model else '—'}",
+            f"{_label('provider:')}{escape(s.provider) if s.provider else '—'}",
+            f"{_label('directory:')}{escape(s.cwd) if s.cwd else '—'}",
+            f"{_label('branch:')}{escape(s.branch) if s.branch else '—'}",
             f"{_label('pid:')}{s.pid or '—'}",
         ]
         if s.last_activity:
             age = (utcnow() - s.last_activity).total_seconds()
             lines.append(t("last act: {age} min ago", age=f"{age / 60:.1f}"))
-        lines.append(f"{_label('session:')}{s.source or '—'}")
+        lines.append(f"{_label('session:')}{escape(s.source) if s.source else '—'}")
         note = self._notes.get(self._note_key_for(s))
         if note:
-            lines.append(f"{_label('note:')}{note}")
+            lines.append(f"{_label('note:')}{escape(note)}")
         return Panel(
             "\n".join(lines),
             title=t("session detail"),
@@ -303,10 +307,10 @@ class Dashboard:
             quota = row.get("quota")
             limits = Text()
             if quota and quota.windows:
-                for w in quota.windows:
+                for wi, w in enumerate(quota.windows):
+                    if wi:
+                        limits.append("\n")
                     limits.append(_usage_window_cell(w))
-                    limits.append("\n")
-                limits = Text.from_markup(limits.plain.rstrip("\n"))
             else:
                 limits = Text(t("no official quota data (no subscription / api key)"), style="dim")
             plan = quota.plan if quota and quota.plan else "—"
@@ -336,11 +340,11 @@ class Dashboard:
 
     def _usage_detail_panel(self, row: dict) -> Panel:
         quota = row.get("quota")
-        lines = [f"{_label('agent:')}[bold]{row['agent']}[/]"]
+        lines = [f"{_label('agent:')}[bold]{escape(row['agent'])}[/]"]
         if quota:
-            lines.append(f"{_label('provider:')}{quota.provider}")
+            lines.append(f"{_label('provider:')}{escape(quota.provider)}")
             if quota.plan:
-                lines.append(f"{_label('plan:')}{quota.plan}")
+                lines.append(f"{_label('plan:')}{escape(quota.plan)}")
             for w in quota.windows:
                 line = f"{t(w.label):>10}:  {_limit_status(w.pct).plain}"
                 if w.countdown:

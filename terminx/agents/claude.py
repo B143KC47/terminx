@@ -1,5 +1,5 @@
 import json
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from ..core.processes import running_pids_with_cwd
@@ -66,7 +66,7 @@ class ClaudeAdapter(AgentAdapter):
             info = self._read_session(newest, last, self._settings_model(cfg))
             if info:
                 rows.append(info)
-        rows.sort(key=lambda s: s.last_activity or datetime.min, reverse=True)
+        rows.sort(key=lambda s: s.last_activity or datetime.min.replace(tzinfo=timezone.utc), reverse=True)
         return rows[: cfg.get("max_rows_per_agent", 6)]
 
     @staticmethod
@@ -117,6 +117,7 @@ class ClaudeAdapter(AgentAdapter):
                 msg = obj.get("message") or {}
                 if msg.get("model"):
                     model = msg["model"]
+                waiting = False
             elif kind == "user" and not obj.get("isSidechain"):
                 waiting = True
         return {"cwd": cwd, "model": model, "waiting": waiting}

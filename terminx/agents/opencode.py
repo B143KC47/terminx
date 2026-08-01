@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from ..core.processes import running_pids_with_cwd
@@ -110,7 +110,7 @@ class OpenCodeAdapter(AgentAdapter):
                     resume_cmd=["opencode", "--session", entry.get("id", "")],
                 )
             )
-        rows.sort(key=lambda s: s.last_activity or datetime.min, reverse=True)
+        rows.sort(key=lambda s: s.last_activity or datetime.min.replace(tzinfo=timezone.utc), reverse=True)
         return rows[: cfg.get("max_rows_per_agent", 6)]
 
     def usage_records(self, since: datetime, cfg: dict) -> list:
