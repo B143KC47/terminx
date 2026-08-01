@@ -3,6 +3,7 @@ import time
 import urllib.request
 from pathlib import Path
 
+from ..i18n import t
 from .base import Quota, QuotaWindow
 
 _CACHE: dict[str, tuple[float, Quota | None]] = {}
@@ -36,15 +37,15 @@ def _fmt_countdown(reset_after: int | None, reset_at: int | None) -> str | None:
     else:
         return None
     if seconds <= 0:
-        return "resets now"
+        return t("resets now")
     days, rem = divmod(seconds, 86400)
     hours, rem = divmod(rem, 3600)
     minutes = rem // 60
     if days:
-        return f"resets in {days}d {hours}h"
+        return t("resets in {days}d {hours}h", days=days, hours=hours)
     if hours:
-        return f"resets in {hours}h {minutes}m"
-    return f"resets in {minutes}m"
+        return t("resets in {hours}h {minutes}m", hours=hours, minutes=minutes)
+    return t("resets in {minutes}m", minutes=minutes)
 
 
 # ---------------------------------------------------------------------------
@@ -56,13 +57,13 @@ def fetch_codex_quota(cfg: dict) -> Quota | None:
     def fetch() -> Quota:
         auth_file = Path.home() / ".codex" / "auth.json"
         if not auth_file.exists():
-            raise RuntimeError("no codex auth")
+            raise RuntimeError(t("no codex auth"))
         auth = json.loads(auth_file.read_text(encoding="utf-8"))
         tokens = auth.get("tokens") or {}
         access_token = tokens.get("access_token")
         account_id = tokens.get("account_id")
         if not access_token or not account_id:
-            raise RuntimeError("codex auth missing token")
+            raise RuntimeError(t("codex auth missing token"))
         base = cfg.get("codex_usage_url", "https://chatgpt.com/backend-api")
         data = _http_json(
             f"{base}/wham/usage",
@@ -121,12 +122,12 @@ def fetch_claude_quota(cfg: dict) -> Quota | None:
     def fetch() -> Quota:
         creds_file = Path.home() / ".claude" / ".credentials.json"
         if not creds_file.exists():
-            raise RuntimeError("no claude credentials")
+            raise RuntimeError(t("no claude credentials"))
         creds = json.loads(creds_file.read_text(encoding="utf-8"))
         oauth = creds.get("claudeAiOauth") or {}
         token = oauth.get("accessToken") if isinstance(oauth, dict) else oauth
         if not token:
-            raise RuntimeError("claude oauth token empty (routed/proxy setup)")
+            raise RuntimeError(t("claude oauth token empty (routed/proxy setup)"))
         data = _http_json(
             "https://api.anthropic.com/api/oauth/usage",
             {
@@ -166,7 +167,7 @@ def fetch_kimi_quota(cfg: dict) -> Quota | None:
     def fetch() -> Quota:
         api_key = cfg.get("kimi_api_key") or ""
         if not api_key:
-            raise RuntimeError("no kimi console api key in config")
+            raise RuntimeError(t("no kimi console api key in config"))
         base = cfg.get("kimi_usage_url", "https://api.kimi.com/coding/v1")
         data = _http_json(
             f"{base}/usages",

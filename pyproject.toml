@@ -45,4 +45,4 @@ terminx = "terminx.__main__:main"
 include = ["terminx*"]
 
 [tool.setuptools.package-data]
-terminx = ["config.example.json"]
+terminx = ["config.example.json", "locales/*.json"]

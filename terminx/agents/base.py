@@ -4,6 +4,7 @@ from datetime import datetime
 
 from ..core.processes import running_pids
 from ..core.usage import UsageRecord, utcnow
+from ..i18n import t
 
 
 @dataclass
@@ -72,7 +73,7 @@ class AgentAdapter(ABC):
             pid = self.resolve_pid(s)
             if pid is None:
                 s.status = "offline"
-                s.detail = "no live process in dir"
+                s.detail = t("no live process in dir")
                 return s
             s.pid = pid
         else:
@@ -86,10 +87,10 @@ class AgentAdapter(ABC):
             s.status = "working"
         elif age <= cfg.get("blocked_threshold_sec", 600):
             s.status = "blocked"
-            s.detail = f"waiting {int(age)}s"
+            s.detail = t("waiting {age}s", age=int(age))
         else:
             s.status = "idle"
-            s.detail = f"idle {int(age)}s"
+            s.detail = t("idle {age}s", age=int(age))
         return s
 
     def resolve_pid(self, s: SessionInfo) -> int | None:

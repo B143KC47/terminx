@@ -15,18 +15,27 @@ from rich.table import Table
 from rich.text import Text
 
 from ..agents.base import AgentAdapter, SessionInfo
+from ..config import load_config
 from ..core.gitutil import git_branch
 from ..core.state import load_state, save_state
 from ..core.usage import utcnow
-from ..config import load_config
+from ..i18n import t
 from .colors import agent_color, cycle_color
 
 STATUS_STYLE = {
-    "working": ("green", "● working"),
-    "blocked": ("yellow", "■ blocked"),
-    "idle": ("cyan", "○ idle"),
-    "running": ("blue", "○ running"),
-    "offline": ("dim red", "· offline"),
+    "working": ("green", "working"),
+    "blocked": ("yellow", "blocked"),
+    "idle": ("cyan", "idle"),
+    "running": ("blue", "running"),
+    "offline": ("dim red", "offline"),
+}
+
+STATUS_GLYPH = {
+    "working": "●",
+    "blocked": "■",
+    "idle": "○",
+    "running": "○",
+    "offline": "·",
 }
 
 
@@ -34,7 +43,7 @@ def _limit_status(pct: float | None, hit: bool = False) -> Text:
     if hit:
         return Text("HIT", style="bold red")
     if pct is None:
-        return Text("n/a", style="dim")
+        return Text(t("n/a"), style="dim")
     if pct >= 90:
         label, style = "HIT", "bold red"
     elif pct >= 80:
@@ -45,12 +54,12 @@ def _limit_status(pct: float | None, hit: bool = False) -> Text:
 
 
 def _usage_window_cell(win) -> Text:
-    t = Text()
-    t.append(f"{win.label}: ")
-    t.append(_limit_status(win.pct))
+    t_row = Text()
+    t_row.append(f"{t(win.label)}: ")
+    t_row.append(_limit_status(win.pct))
     if win.countdown:
-        t.append(f" ({win.countdown})", style="dim")
-    return t
+        t_row.append(f" ({win.countdown})", style="dim")
+    return t_row
 
 
 def _find_wt() -> str | None:
@@ -135,18 +144,19 @@ class Dashboard:
 
     def _header(self, title: str, summary: str) -> Panel:
         last_scan = self._last_scan
-        keys = "↑↓ select · ←→ view · Enter pop · n note · c color · d details · q quit"
-        scan_txt = "scanning…" if self._scanning else (
-            f"scan: {last_scan.strftime('%H:%M:%S') if last_scan else '—'}"
+        keys = t("↑↓ select · ←→ view · Enter pop · n note · c color · d details · q quit")
+        scan_txt = t("scanning…") if self._scanning else t(
+            "scan: {time}",
+            time=last_scan.strftime("%H:%M:%S") if last_scan else "—",
         )
         return Panel(
-            f"[bold]termiX[/] — {title}  {summary}",
+            t("[bold]termiX[/] — {title}  {summary}", title=title, summary=summary),
             box=box.ROUNDED,
-            subtitle=f"{scan_txt} · refresh {self.cfg.get('refresh_sec', 3)}s · {keys}",
+            subtitle=f"{scan_txt} · {t('refresh {sec}s', sec=self.cfg.get('refresh_sec', 3))} · {keys}",
         )
 
     def _footer(self, note: str) -> Panel:
-        return Panel(Text(note, style="dim"), box=box.SIMPLE)
+        return Panel(Text.from_markup(note, style="dim"), box=box.SIMPLE)
 
     def _render_terminals(self) -> Group:
         with self._lock:
@@ -156,10 +166,10 @@ class Dashboard:
         table = Table(box=box.SIMPLE_HEAVY, expand=True, pad_edge=False, header_style="bold")
         for col, min_w, wrap in [
             ("", 3, False),
-            ("agent", 6, False),
-            ("status", 10, False),
-            ("model", 8, False),
-            ("directory", 16, True),
+            (t("agent"), 6, False),
+            (t("status"), 10, False),
+            (t("model"), 8, False),
+            (t("directory"), 16, True),
         ]:
             table.add_column(
                 col,
@@ -176,7 +186,7 @@ class Dashboard:
                 working += 1
             elif s.status == "blocked":
                 blocked += 1
-            status = Text(label, style=style)
+            status = Text(f"{STATUS_GLYPH.get(s.status, '·')} {t(label)}", style=style)
             if s.detail:
                 status.append(f" ({s.detail[:12]})", style="dim")
             model = (s.model or "—")[:16]
@@ -193,31 +203,37 @@ class Dashboard:
 
         if not rows:
             msg = (
-                "scanning for running agents…"
+                t("scanning for running agents…")
                 if self._scanning and self._last_scan is None
-                else "open a terminal with codex / opencode / claude / kimi"
+                else t("open a terminal with codex / opencode / claude / kimi")
             )
-            table.add_row("", "—", Text("no agents running", style="dim"), "—", msg)
+            table.add_row("", "—", Text(t("no agents running"), style="dim"), "—", msg)
 
         total = len(rows)
-        summary = (
-            f"[green]{working} working[/] · [yellow]{blocked} blocked[/] · "
-            f"[cyan]{total - working - blocked} running[/]"
+        summary = t(
+            "[green]{working} working[/] · [yellow]{blocked} blocked[/] · [cyan]{running} running[/]",
+            working=working,
+            blocked=blocked,
+            running=total - working - blocked,
         )
-        header = self._header("open terminals", summary)
+        header = self._header(t("open terminals"), summary)
         footer = self._footer(
-            "only sessions open right now · [bold]Enter[/] = pop · [bold]n[/] = note · [bold]c[/] = color · [bold]d[/] = details"
+            t("only sessions open right now · [bold]Enter[/] = pop · [bold]n[/] = note · [bold]c[/] = color · [bold]d[/] = details")
         )
         parts: list = [header, table, footer]
         if self._note_edit is not None and rows:
             s = rows[self.cursor]
-            prompt = f"✎ note for [bold]{s.agent}[/] ({s.cwd or '—'}): {self._note_edit}▌"
+            prompt = t(
+                "✎ note for [bold]{agent}[/] ({cwd}): ",
+                agent=s.agent,
+                cwd=s.cwd or "—",
+            ) + self._note_edit + "▌"
             parts.append(
                 Panel(
                     Text.from_markup(prompt),
-                    title="enter note",
+                    title=t("enter note"),
                     border_style="yellow",
-                    subtitle="Enter save · Esc cancel",
+                    subtitle=t("Enter save · Esc cancel"),
                     box=box.ROUNDED,
                 )
             )
@@ -232,25 +248,25 @@ class Dashboard:
 
     def _session_detail_panel(self, s: SessionInfo) -> Panel:
         lines = [
-            f"agent:      [bold]{s.agent}[/]",
-            f"status:     {STATUS_STYLE.get(s.status, ('white', s.status))[1]}"
+            f"{t('agent:')}      [bold]{s.agent}[/]",
+            f"{t('status:')}     {t(STATUS_STYLE.get(s.status, ('white', s.status))[1])}"
             + (f" ({s.detail})" if s.detail else ""),
-            f"model:      {s.model or '—'}",
-            f"provider:   {s.provider or '—'}",
-            f"directory:  {s.cwd or '—'}",
-            f"branch:     {s.branch or '—'}",
-            f"pid:        {s.pid or '—'}",
+            f"{t('model:')}      {s.model or '—'}",
+            f"{t('provider:')}   {s.provider or '—'}",
+            f"{t('directory:')}  {s.cwd or '—'}",
+            f"{t('branch:')}     {s.branch or '—'}",
+            f"{t('pid:')}        {s.pid or '—'}",
         ]
         if s.last_activity:
             age = (utcnow() - s.last_activity).total_seconds()
-            lines.append(f"last act:   {age / 60:.1f} min ago")
-        lines.append(f"session:    {s.source or '—'}")
+            lines.append(t("last act: {age} min ago", age=f"{age / 60:.1f}"))
+        lines.append(f"{t('session:')}    {s.source or '—'}")
         note = self._notes.get(self._note_key_for(s))
         if note:
-            lines.append(f"note:       {note}")
+            lines.append(f"{t('note:')}       {note}")
         return Panel(
             "\n".join(lines),
-            title="session detail",
+            title=t("session detail"),
             border_style="blue",
             box=box.ROUNDED,
         )
@@ -263,10 +279,10 @@ class Dashboard:
         table = Table(box=box.SIMPLE_HEAVY, expand=True, pad_edge=False, header_style="bold")
         for col, min_w in [
             ("", 3),
-            ("agent", 8),
-            ("provider", 18),
-            ("plan", 10),
-            ("limits", 34),
+            (t("agent"), 8),
+            (t("provider"), 18),
+            (t("plan"), 10),
+            (t("limits"), 34),
         ]:
             table.add_column(
                 col,
@@ -285,9 +301,9 @@ class Dashboard:
                     limits.append("\n")
                 limits = Text.from_markup(limits.plain.rstrip("\n"))
             else:
-                limits = Text("no official quota data (no subscription / api key)", style="dim")
+                limits = Text(t("no official quota data (no subscription / api key)"), style="dim")
             plan = quota.plan if quota and quota.plan else "—"
-            provider = quota.provider if quota else "no subscription"
+            provider = quota.provider if quota else t("no subscription")
             cells = [
                 self._select(len(usage_rows), i),
                 Text(row["agent"], style=self._agent_style(row["agent"])),
@@ -298,11 +314,11 @@ class Dashboard:
             table.add_row(*cells)
 
         header = self._header(
-            "account usage",
-            "official subscription quota per account — 5h / weekly / monthly",
+            t("account usage"),
+            t("official subscription quota per account — 5h / weekly / monthly"),
         )
         footer = self._footer(
-            "OK <80% · NEAR 80–90% · HIT ≥90% — official provider APIs only · [bold]←[/] = terminals view"
+            t("OK <80% · NEAR 80–90% · HIT ≥90% — official provider APIs only · [bold]←[/] = terminals view")
         )
         parts: list = [header, table, footer]
         if self.detail and usage_rows:
@@ -313,28 +329,28 @@ class Dashboard:
 
     def _usage_detail_panel(self, row: dict) -> Panel:
         quota = row.get("quota")
-        lines = [f"agent:      [bold]{row['agent']}[/]"]
+        lines = [f"{t('agent:')}      [bold]{row['agent']}[/]"]
         if quota:
-            lines.append(f"provider:   {quota.provider}")
+            lines.append(f"{t('provider:')}   {quota.provider}")
             if quota.plan:
-                lines.append(f"plan:       {quota.plan}")
+                lines.append(f"{t('plan:')}       {quota.plan}")
             for w in quota.windows:
-                line = f"{w.label:>10}:  {_limit_status(w.pct).plain}"
+                line = f"{t(w.label):>10}:  {_limit_status(w.pct).plain}"
                 if w.countdown:
                     line += f"  · {w.countdown}"
                 lines.append(line)
         else:
-            lines.append("provider:   no official subscription quota available")
+            lines.append(f"{t('provider:')}   {t('no official subscription quota available')}")
         return Panel(
             "\n".join(lines),
-            title="quota breakdown",
+            title=t("quota breakdown"),
             border_style="blue",
             box=box.ROUNDED,
         )
 
     def _pop_terminal(self, s: SessionInfo) -> str:
         if not s.cwd or not Path(s.cwd).exists():
-            return "no working directory — cannot open"
+            return t("no working directory — cannot open")
         try:
             from ..core.win32 import find_terminal_window, focus_window, pid_cwd_matches
         except ImportError:
@@ -346,21 +362,21 @@ class Dashboard:
             if hwnd:
                 try:
                     focus_window(hwnd)
-                    return f"focused existing {s.agent} window ({folder})"
+                    return t("focused existing {agent} window ({folder})", agent=s.agent, folder=folder)
                 except Exception as e:
-                    return f"failed to focus window: {e}"
+                    return t("failed to focus window: {err}", err=e)
         wt = _find_wt()
         if not wt:
-            return "windows terminal (wt) not found"
+            return t("windows terminal (wt) not found")
         cmd = s.resume_cmd or [s.agent]
         try:
             subprocess.Popen(
                 [wt, "-w", "new", "-d", s.cwd, *cmd],
                 creationflags=subprocess.CREATE_NEW_CONSOLE,
             )
-            return f"popped {s.agent} → {s.cwd}"
+            return t("popped {agent} → {cwd}", agent=s.agent, cwd=s.cwd)
         except Exception as e:
-            return f"failed to open terminal: {e}"
+            return t("failed to open terminal: {err}", err=e)
 
     def _note_key_for(self, s: SessionInfo) -> str:
         return f"{s.agent}::{s.cwd or ''}"
@@ -513,7 +529,7 @@ class Dashboard:
                 self._handle_keys()
                 live.update(self.render())
                 time.sleep(0.05)
-        self.console.print("\n[dim]bye[/]")
+        self.console.print(t("[dim]bye[/]"))
 
 
 def run() -> None:

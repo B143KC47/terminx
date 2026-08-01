@@ -3,6 +3,7 @@ from pathlib import Path
 
 from ..core.processes import running_pids_with_cwd
 from ..core.usage import cached_json_parse, parse_ts, utcnow
+from ..i18n import t
 from .base import AgentAdapter, SessionInfo
 
 
@@ -96,7 +97,7 @@ class OpenCodeAdapter(AgentAdapter):
             last = entry.get("last_seen")
             if last and last < since:
                 continue
-            detail = "permission prompt" if entry.get("asking") else ""
+            detail = t("permission prompt") if entry.get("asking") else ""
             rows.append(
                 SessionInfo(
                     agent=self.name,

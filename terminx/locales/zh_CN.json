@@ -1,0 +1,92 @@
+{
+  "working": "工作中",
+  "blocked": "受阻",
+  "idle": "空闲",
+  "running": "运行中",
+  "offline": "离线",
+  "n/a": "无",
+
+  "agent": "代理",
+  "status": "状态",
+  "model": "模型",
+  "directory": "目录",
+  "provider": "提供商",
+  "plan": "套餐",
+  "limits": "额度",
+
+  "↑↓ select · ←→ view · Enter pop · n note · c color · d details · q quit": "↑↓ 选择 · ←→ 视图 · Enter 弹出 · n 笔记 · c 颜色 · d 详情 · q 退出",
+  "scanning…": "扫描中…",
+  "scan: {time}": "扫描: {time}",
+  "refresh {sec}s": "刷新 {sec} 秒",
+  "termiX — {title}  {summary}": "termiX — {title}  {summary}",
+  "[bold]termiX[/] — {title}  {summary}": "[bold]termiX[/] — {title}  {summary}",
+
+  "scanning for running agents…": "正在扫描运行中的代理…",
+  "open a terminal with codex / opencode / claude / kimi": "请打开 codex / opencode / claude / kimi 的终端",
+  "no agents running": "没有代理在运行",
+
+  "[green]{working} working[/] · [yellow]{blocked} blocked[/] · [cyan]{running} running[/]": "[green]{working} 工作中[/] · [yellow]{blocked} 受阻[/] · [cyan]{running} 运行中[/]",
+
+  "open terminals": "打开的终端",
+  "account usage": "账户用量",
+  "official subscription quota per account — 5h / weekly / monthly": "各账户的官方订阅额度 — 5 小时 / 每周 / 每月",
+
+  "only sessions open right now · [bold]Enter[/] = pop · [bold]n[/] = note · [bold]c[/] = color · [bold]d[/] = details": "仅显示当前打开的会话 · [bold]Enter[/] = 弹出 · [bold]n[/] = 笔记 · [bold]c[/] = 颜色 · [bold]d[/] = 详情",
+  "OK <80% · NEAR 80–90% · HIT ≥90% — official provider APIs only · [bold]←[/] = terminals view": "OK <80% · NEAR 80–90% · HIT ≥90% — 仅官方提供商 API · [bold]←[/] = 终端视图",
+
+  "✎ note for [bold]{agent}[/] ({cwd}): ": "✎ 为 [bold]{agent}[/] 添加笔记 ({cwd}): ",
+  "enter note": "输入笔记",
+  "Enter save · Esc cancel": "Enter 保存 · Esc 取消",
+
+  "session detail": "会话详情",
+  "agent:": "代理:",
+  "status:": "状态:",
+  "model:": "模型:",
+  "provider:": "提供商:",
+  "directory:": "目录:",
+  "branch:": "分支:",
+  "pid:": "PID:",
+  "last act: {age} min ago": "最近活动: {age} 分钟前",
+  "session:": "会话:",
+  "note:": "笔记:",
+
+  "no official quota data (no subscription / api key)": "无官方额度数据（无订阅或 API key）",
+  "no subscription": "无订阅",
+  "quota breakdown": "额度明细",
+  "no official subscription quota available": "暂无官方订阅额度数据",
+
+  "weekly": "每周",
+  "5h": "5 小时",
+  "7d": "7 天",
+  "7d sonnet": "7 天 sonnet",
+  "7d opus": "7 天 opus",
+  "limit": "限额",
+
+  "no working directory — cannot open": "无工作目录 — 无法打开",
+  "focused existing {agent} window ({folder})": "已聚焦现有 {agent} 窗口 ({folder})",
+  "failed to focus window: {err}": "聚焦窗口失败: {err}",
+  "windows terminal (wt) not found": "未找到 Windows Terminal (wt)",
+  "popped {agent} → {cwd}": "已弹出 {agent} → {cwd}",
+  "failed to open terminal: {err}": "打开终端失败: {err}",
+
+  "[dim]bye[/]": "[dim]再见[/]",
+
+  "no live process in dir": "目录中没有活动的进程",
+  "waiting {age}s": "等待 {age} 秒",
+  "idle {age}s": "{age} 秒",
+  "awaiting reply": "等待回复",
+  "permission prompt": "权限询问",
+
+  "resets now": "即将重置",
+  "resets in {days}d {hours}h": "重置剩余 {days} 天 {hours} 小时",
+  "resets in {hours}h {minutes}m": "重置剩余 {hours} 小时 {minutes} 分",
+  "resets in {minutes}m": "重置剩余 {minutes} 分",
+
+  "no codex auth": "未找到 codex 认证信息",
+  "codex auth missing token": "codex 认证缺少令牌",
+  "no claude credentials": "未找到 claude 凭据",
+  "claude oauth token empty (routed/proxy setup)": "claude OAuth 令牌为空（路由/代理配置）",
+  "no kimi console api key in config": "配置中缺少 kimi 控制台 API key",
+
+  "render a single frame and exit": "渲染一帧后退出"
+}

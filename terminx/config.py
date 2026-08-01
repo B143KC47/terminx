@@ -4,6 +4,7 @@ from pathlib import Path
 HOME = Path.home()
 
 DEFAULTS = {
+    "lang": "auto",
     "refresh_sec": 3,
     "working_threshold_sec": 60,
     "blocked_threshold_sec": 600,

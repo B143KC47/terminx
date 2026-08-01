@@ -15,6 +15,7 @@ from ..core.usage import (
 )
 from .base import AgentAdapter, Quota, SessionInfo
 from .quota import fetch_claude_quota
+from ..i18n import t
 
 CACHE_READ_KEYS = (
     "cache_read_input_tokens",
@@ -88,7 +89,7 @@ class ClaudeAdapter(AgentAdapter):
         model = meta.get("model")
         if not model or model == "<synthetic>":
             model = fallback_model or model
-        detail = "awaiting reply" if meta.get("waiting") else ""
+        detail = t("awaiting reply") if meta.get("waiting") else ""
         return SessionInfo(
             agent=self.name,
             cwd=cwd,

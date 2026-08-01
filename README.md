@@ -1,22 +1,27 @@
 <div align="center">
 
-# termiX
+# 🖥️ termiX
 
 **One terminal to watch them all.**
 
 A live dashboard for your CLI coding agents — **Codex, OpenCode, Claude Code, Kimi** — showing what every agent is doing right now, in one terminal.
 
+![Python](https://img.shields.io/badge/python-3.10%2B-blue)
+![Platform](https://img.shields.io/badge/platform-Windows-blueviolet)
+![License](https://img.shields.io/badge/license-MIT-green)
+![Version](https://img.shields.io/badge/version-0.1.0-orange)
+
 ```
-┌──────────────────────────────────────────────────────────────────────────────────┐
-│ termiX — open terminals  1 working · 1 blocked · 0 running                       │
-└─ scan: 15:43:07 · refresh 3s · ↑↓ select · ←→ view · Enter pop · n note · c ... ─┘
-                                                                                   
-        agent      status                     model              directory          
- ────────────────────────────────────────────────────────────────────────────────── 
- ▸      opencode   ● working                  deepseek-v4-flas   C:\Users\you  \...
-                                                                 terminX            
-        codex      ■ blocked (waiting 423s)   gpt-5.6-sol        C:\Users\you  \...
-                                                                 diffusion_research
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ termiX — open terminals  1 working · 0 blocked · 2 running                  │
+└─ scan: 15:43:07 · refresh 3s · ↑↓ select · ←→ view · Enter pop · n note · c ─┘
+                                                                               
+        agent      status                 model              directory        
+ ───────────────────────────────────────────────────────────────────────────── 
+ ▸      opencode   ● working              deepseek-v4-flas   C:\Users\you  \…
+        codex      ■ blocked (waiting     gpt-5.6-sol        …\diffusion_rese…
+                   423s)                                                       
+        kimi       ○ idle                 kimi-k2-0711       …\site_rebuild    
 ```
 
 </div>
@@ -26,20 +31,25 @@ A live dashboard for your CLI coding agents — **Codex, OpenCode, Claude Code, 
 ## ✨ Features
 
 - **Live terminal overview** — every agent session currently open on your machine:
-  status (`working` / `blocked` / `idle`), model in use, working directory, git branch
+  status (`● working` / `■ blocked` / `○ idle`), model in use, working directory, git branch
 - **Pop into the real terminal** — `Enter` brings the selected session's terminal
   window to the foreground (Windows Terminal), resuming the exact same conversation
 - **Account quota at a glance** — official subscription limits (5h / weekly / monthly)
   straight from the provider APIs: `OK` / `NEAR` / `HIT` + reset countdown
 - **Per-terminal notes** — jot down what each agent is working on; notes persist
 - **Per-agent colors** — auto-assigned palette, or cycle with `c` and save
+- **Internationalized** — English & 简体中文 built in; language auto-detected from
+  your system locale, override anytime in the config
 - **Pluggable adapters** — adding a new CLI agent is ~30 lines
 
 ## 📦 Requirements
 
-- Windows (Windows Terminal recommended) — macOS/Linux: status detection works, "pop into terminal" falls back to spawning a new window
+- Windows (Windows Terminal recommended) — macOS/Linux: status detection works,
+  "pop into terminal" falls back to spawning a new window
 - Python 3.10+
-- One or more of: [Codex](https://github.com/openai/codex), [OpenCode](https://opencode.ai), [Claude Code](https://docs.claude.com), [Kimi Code](https://www.kimi.com/code)
+- One or more of: [Codex](https://github.com/openai/codex),
+  [OpenCode](https://opencode.ai), [Claude Code](https://docs.claude.com),
+  [Kimi Code](https://www.kimi.com/code)
 
 ## 🚀 Install
 
@@ -72,8 +82,9 @@ terminx --once       # render a single frame and exit
 ## 📊 What each view shows
 
 ### Open terminals
-Only sessions that are **actually running right now** — stale session files are filtered
-out by matching each session's working directory against live processes.
+
+Only sessions that are **actually running right now** — stale session files are
+filtered out by matching each session's working directory against live processes.
 
 | column | meaning |
 |---|---|
@@ -83,6 +94,7 @@ out by matching each session's working directory against live processes.
 | directory | working directory (+ git branch in magenta) |
 
 ### Account usage
+
 Official subscription quota **only** — no local estimation, and your local model
 configuration (e.g. a router/proxy setup) has no influence.
 
@@ -108,6 +120,7 @@ Create `~/.terminx.json` (or `~/.config/terminx/config.json`). Full example:
 
 ```json
 {
+  "lang": "auto",
   "refresh_sec": 3,
   "working_threshold_sec": 60,
   "blocked_threshold_sec": 600,
@@ -119,9 +132,21 @@ Create `~/.terminx.json` (or `~/.config/terminx/config.json`). Full example:
 }
 ```
 
+- `lang` — UI language: `"auto"` (detect from system locale) · `"en"` · `"zh_CN"`.
+  You can also force it per-run: `set LANG=en_US && terminx`
 - `colors` — fixed per-agent colors (otherwise auto-assigned; `c` cycles live)
 - `kimi_api_key` — optional, enables official Kimi quota
 - `paths` — override an agent's data directory, e.g. `{"codex": "D:/codex-data"}`
+
+## 🌐 Adding a language
+
+Translations live in `terminx/locales/<code>.json` as simple key→text maps, where
+the key is the original English string. To add a language:
+
+1. Copy `terminx/locales/zh_CN.json` to `terminx/locales/<code>.json`
+2. Translate the values (keep `{placeholders}` and rich markup like `[bold]…[/]` intact)
+3. Add the code to `SUPPORTED` in `terminx/i18n.py`
+4. Set `"lang": "<code>"` in your config to try it
 
 ## 🔐 Privacy
 
@@ -158,13 +183,15 @@ resolution, and quota caching come free from the base class.
 
 ```
 terminx/
-├── agents/          # one adapter per CLI agent (codex, claude, opencode, kimi)
-│   ├── base.py      # AgentAdapter ABC: sessions, status, resolve_pid
-│   └── quota.py     # official quota fetchers (cached 120s)
-├── core/            # processes (tasklist), git branch, win32 window-focus, state
+├── agents/            # one adapter per CLI agent (codex, claude, opencode, kimi)
+│   ├── base.py        # AgentAdapter ABC: sessions, status, resolve_pid
+│   └── quota.py       # official quota fetchers (cached 120s)
+├── core/              # processes (tasklist), git branch, win32 window-focus, state
+├── i18n.py            # language detection + catalog loader
+├── locales/           # translation catalogs (zh_CN.json; English is embedded)
 └── ui/
-    ├── dashboard.py # rich Live TUI: key handling, views, notes, colors
-    └── colors.py    # per-agent palette
+    ├── dashboard.py   # rich Live TUI: key handling, views, notes, colors
+    └── colors.py      # per-agent palette
 ```
 
 Key design points:
