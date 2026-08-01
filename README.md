@@ -26,6 +26,8 @@ A live dashboard for your CLI coding agents — **Codex, OpenCode, Claude Code, 
 
 </div>
 
+**Languages / 语言:** English · [简体中文](README.zh_CN.md)
+
 ---
 
 ## ✨ Features
@@ -147,6 +149,9 @@ the key is the original English string. To add a language:
 2. Translate the values (keep `{placeholders}` and rich markup like `[bold]…[/]` intact)
 3. Add the code to `SUPPORTED` in `terminx/i18n.py`
 4. Set `"lang": "<code>"` in your config to try it
+
+For the docs, translate `README.md` into `README.<code>.md` (e.g.
+`README.zh_CN.md`) and add it to the language links at the top of each README.
 
 ## 🔐 Privacy
 
