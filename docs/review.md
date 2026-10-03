@@ -49,8 +49,8 @@ They are a maintenance cost, but unrelated structural changes would increase rel
 ## Validation record
 
 The maintained validation record is [Windows validation](sidebar-validation.md).
-The local suite passed 131 tests without skipped desktop tests.
-The measured statement coverage was 63.14 percent.
+The local suite passed 132 tests without skipped desktop tests.
+The measured statement coverage was 63.13 percent.
 Startup coverage was 100 percent; event reduction coverage was 93 percent.
 Log reader coverage was 89 percent; hook configuration coverage was 92 percent.
 Code, document, and dependency checks passed.
@@ -60,6 +60,10 @@ Native control checks passed seven interaction scenarios.
 Visual checks passed at scale factors 1.0, 1.5, 1.875, and 2.0.
 The real package check passed installation, startup controls, update settings, removal, and note preservation.
 The local communication tests use different processes and incomplete message frames.
+The server exit test checks command receipt before the process stops.
+Windows can discard unread pipe data when its server disconnects.
+The protocol waits for the client to read its response before the server quits.
+See the [Windows pipe reference](https://learn.microsoft.com/en-us/windows/win32/api/namedpipeapi/nf-namedpipeapi-disconnectnamedpipe).
 The published acceptance record contains Boolean results for these package checks.
 One early native run missed a panel click.
 A later serialized run passed all seven checks.

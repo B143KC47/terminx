@@ -71,6 +71,36 @@ class SidebarTests(unittest.TestCase):
             server.close()
             QLocalServer.removeServer(name)
 
+    def test_close_command_is_acknowledged_before_server_process_exits(self):
+        from PySide6.QtTest import QTest
+
+        name = "terminx-test-" + uuid.uuid4().hex
+        server = subprocess.Popen(
+            [
+                sys.executable,
+                str(Path(__file__).with_name("instance_server.py")),
+                name,
+                self.temp.name,
+            ],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            cwd=Path(__file__).resolve().parents[1],
+        )
+        try:
+            deadline = time.monotonic() + 6
+            while (
+                not (Path(self.temp.name) / "server-ready").exists()
+                and time.monotonic() < deadline
+            ):
+                QTest.qWait(10)
+            self.assertTrue((Path(self.temp.name) / "server-ready").exists())
+            self.finish_instance_client(self.instance_client(name, "quit"))
+            self.finish_instance_client(server)
+        finally:
+            if server.poll() is None:
+                server.kill()
+                server.communicate(timeout=3)
+
     def test_partial_instance_command_waits_for_complete_frame(self):
         from unittest.mock import Mock
 

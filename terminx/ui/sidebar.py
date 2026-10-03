@@ -1169,23 +1169,30 @@ def receive_instance_command(server, window):
         return
     client.disconnected.connect(client.deleteLater)
     buffer = bytearray()
+    received = False
 
     def receive():
+        nonlocal received
+        if received:
+            return
         buffer.extend(bytes(client.readAll()))
+        if len(buffer) > 32:
+            client.abort()
+            return
         if b"\n" not in buffer:
-            if len(buffer) > 32:
-                client.abort()
             return
         message = bytes(buffer).split(b"\n", 1)[0]
         if message not in {b"quit", b"show", b"startup"}:
             client.abort()
             return
+        received = True
+        if message == b"quit":
+            client.disconnected.connect(window.quit)
         client.write(b"ok\n")
         client.flush()
-        client.disconnectFromServer()
-        if message == b"quit":
-            window.quit()
-        elif message == b"show":
+        # Windows discards unread pipe data if the server closes it first.
+        # The client closes after it reads the acknowledgement.
+        if message == b"show":
             window.reveal()
 
     client.readyRead.connect(receive)
