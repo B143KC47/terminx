@@ -475,7 +475,9 @@ class FocusTests(unittest.TestCase):
             }
             sid = launch_session("codex", td, cfg)
             record = json.loads((Path(td) / "launches" / f"{sid}.json").read_text())
-            self.assertEqual(Path(record["data_root"]), Path(td) / "custom")
+            self.assertEqual(
+                Path(record["data_root"]).resolve(), (Path(td) / "custom").resolve()
+            )
             self.assertIn("C:\\Python\\python.exe", spawn.call_args.args[0])
 
 
