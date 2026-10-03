@@ -1,4 +1,5 @@
 import argparse
+import sys
 
 from .i18n import t
 
@@ -6,6 +7,11 @@ from .i18n import t
 def main() -> None:
     from .config import load_config
     from .i18n import set_language
+
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure:
+            reconfigure(encoding="utf-8", errors="backslashreplace")
 
     parser = argparse.ArgumentParser(prog="terminx")
     parser.add_argument(
@@ -40,8 +46,6 @@ def main() -> None:
         cleanup()
         return
     if args.sidebar:
-        import sys
-
         sys.argv = [sys.argv[0]]
         from .ui.sidebar import main as sidebar_main
 

@@ -1,5 +1,7 @@
 # Configuration
 
+CLI output uses UTF-8, including redirected output.
+
 The application reads the first existing configuration file in this order.
 
 1. `~/.config/terminx/config.json`

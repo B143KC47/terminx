@@ -19,7 +19,7 @@ The release uses a different CPython environment.
 The release checks include the test suite, static checks, document checks, and package checks.
 The release assets contain SHA-256 values and a software component record.
 The [review record](review.md) gives the current results.
-The local suite passed 132 tests without skipped desktop tests.
+The local suite passed 133 tests without skipped desktop tests.
 The package check used the real Windows desktop and its UI Automation interface.
 It executed the registered sign-in command without a Python directory on PATH.
 It changed startup through the installed Settings controls.

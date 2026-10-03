@@ -32,6 +32,7 @@ The secondary mode is release planning.
 | High | A command client exits before the sidebar reads its close message | Keep the connection open until the server confirms receipt |
 | High | A disabled startup option becomes enabled during an update | Read current Windows startup state before installation |
 | Medium | A null path map or invalid refresh interval crashes collection | Validate field types and numeric limits without replacing the file |
+| Medium | Redirected Windows output cannot write Chinese interface text | Use UTF-8 for application output |
 | Medium | An import failure causes all desktop tests to skip | Skip only a missing PySide6 module |
 | Medium | Package removal leaves hooks pointing at a removed EXE | Remove recorded termiX hooks before program removal |
 | Medium | A distribution contains no upstream license notices | Copy original notices and include the component record |
@@ -49,8 +50,8 @@ They are a maintenance cost, but unrelated structural changes would increase rel
 ## Validation record
 
 The maintained validation record is [Windows validation](sidebar-validation.md).
-The local suite passed 132 tests without skipped desktop tests.
-The measured statement coverage was 63.13 percent.
+The local suite passed 133 tests without skipped desktop tests.
+The measured statement coverage was 63.07 percent.
 Startup coverage was 100 percent; event reduction coverage was 93 percent.
 Log reader coverage was 89 percent; hook configuration coverage was 92 percent.
 Code, document, and dependency checks passed.

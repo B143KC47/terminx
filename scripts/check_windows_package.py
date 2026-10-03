@@ -72,6 +72,7 @@ def run(command, env, timeout=90):
         check=False,
         capture_output=True,
         text=True,
+        encoding="utf-8",
         timeout=timeout,
         creationflags=subprocess.CREATE_NO_WINDOW,
     )

@@ -19,6 +19,7 @@
 | SBOM | Software bill of materials |
 | SHA-256 | Secure Hash Algorithm with a 256-bit result |
 | TUI | Terminal user interface |
+| UTF-8 | Unicode Transformation Format with 8-bit units |
 | UI | User interface |
 | ZIP | Archive file format |
 | ACP | Agent Client Protocol |
