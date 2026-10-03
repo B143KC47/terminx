@@ -5,6 +5,15 @@ It also has a terminal dashboard.
 The supported CLIs are Codex, Claude Code, Kimi Code, Grok Build, and OpenCode.
 The interface has English and Simplified Chinese text.
 
+## Watch the demo
+
+[![Windows sidebar demo with sample data](docs/media/terminx-demo.gif)](https://github.com/B143KC47/terminx/releases/download/v0.3.0/terminx-0.3.0-demo.mp4)
+
+[Download the full video](https://github.com/B143KC47/terminx/releases/download/v0.3.0/terminx-0.3.0-demo.mp4).
+The video shows the Windows sidebar with sample sessions and quotas.
+It includes a verified switch to a dedicated demonstration terminal.
+See [Demo](docs/demo.md) for the recording scope and reproduction steps.
+
 ## Install
 
 Use Windows 10 version 1809 or later, or Windows 11, on an x64 computer.
