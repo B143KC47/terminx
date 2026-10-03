@@ -36,6 +36,7 @@ The secondary mode is release planning.
 | Medium | An import failure causes all desktop tests to skip | Skip only a missing PySide6 module |
 | Medium | Package removal leaves hooks pointing at a removed EXE | Remove recorded termiX hooks before program removal |
 | Medium | A distribution contains no upstream license notices | Copy original notices and include the component record |
+| Medium | A first launch creates no notes map, and the package check fails | Create the note map before the check writes its test note |
 | Low | Dense statements and inconsistent imports hide behavior | Apply one format and import rules to source and tests |
 
 ## Readability review

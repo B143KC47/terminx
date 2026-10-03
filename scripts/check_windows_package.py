@@ -215,7 +215,7 @@ def check(assets, ui):
             results["native_desktop"] = ui
             notes = state / "sidebar.json"
             saved = json.loads(notes.read_text(encoding="utf-8"))
-            saved["notes"]["synthetic-note"] = "keep after uninstall"
+            saved.setdefault("notes", {})["synthetic-note"] = "keep after uninstall"
             notes.write_text(json.dumps(saved), encoding="utf-8")
             installed = work / "installed folder"
             install_command = [
