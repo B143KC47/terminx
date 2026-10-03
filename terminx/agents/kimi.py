@@ -2,7 +2,6 @@ import json
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from ..core.processes import running_pids_with_cwd, normalize_path
 from ..core.usage import (
     UsageRecord,
     cached_json_parse,
@@ -29,16 +28,6 @@ class KimiAdapter(AgentAdapter):
     process_names = ["kimi"]
     primary_process = "kimi"
 
-    def resolve_pid(self, s: SessionInfo) -> int | None:
-        if not s.cwd:
-            return None
-        procs = running_pids_with_cwd(["kimi", "kimi.exe"])
-        target = normalize_path(s.cwd)
-        for pid, cwd in procs.items():
-            if normalize_path(cwd) == target:
-                return pid
-        return None
-
     def quota(self, cfg: dict) -> Quota | None:
         return fetch_kimi_quota(cfg)
 
@@ -61,14 +50,16 @@ class KimiAdapter(AgentAdapter):
                 state = sdir / "state.json"
                 if not state.exists():
                     continue
-                meta = cached_json_parse(state, _read_state_json)
-                if not meta:
-                    continue
                 wire = sdir / "agents" / "main" / "wire.jsonl"
                 last = mtime_utc(wire) if wire.exists() else mtime_utc(state)
                 if last < since:
                     continue
-                model = cached_json_parse(wire, self._read_model) if wire.exists() else None
+                meta = cached_json_parse(state, _read_state_json)
+                if not isinstance(meta, dict):
+                    continue
+                model = (
+                    cached_json_parse(wire, self._read_model) if wire.exists() else None
+                )
                 cwd = meta.get("workDir")
                 title = (meta.get("title") or "")[:24]
                 rows.append(
@@ -78,12 +69,19 @@ class KimiAdapter(AgentAdapter):
                         model=model,
                         last_activity=last,
                         source=str(sdir),
+                        session_id=sdir.name,
+                        data_root=str(self._root(cfg)),
+                        activity_path=str(wire),
+                        title=meta.get("title") or "",
                         detail=title,
-                        resume_cmd=["kimi", "-c"],
+                        resume_cmd=["kimi", "--session", sdir.name],
                     )
                 )
-        rows.sort(key=lambda s: s.last_activity or datetime.min.replace(tzinfo=timezone.utc), reverse=True)
-        return rows[: cfg.get("max_rows_per_agent", 6)]
+        rows.sort(
+            key=lambda s: s.last_activity or datetime.min.replace(tzinfo=timezone.utc),
+            reverse=True,
+        )
+        return rows
 
     @staticmethod
     def _read_model(wire: Path) -> str | None:
@@ -92,6 +90,8 @@ class KimiAdapter(AgentAdapter):
             try:
                 obj = json.loads(line)
             except json.JSONDecodeError:
+                continue
+            if not isinstance(obj, dict):
                 continue
             if obj.get("type") == "llm.request" and obj.get("model"):
                 model = obj["model"]

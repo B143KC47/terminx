@@ -1,5 +1,6 @@
 """i18n sanity tests: catalog completeness, fallback, formatting, detection."""
 
+import ast
 import json
 import os
 import re
@@ -12,12 +13,16 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def _t_keys() -> set[str]:
-    text = "\n".join(p.read_text(encoding="utf-8") for p in (ROOT / "terminx").rglob("*.py"))
+    text = "\n".join(
+        p.read_text(encoding="utf-8") for p in (ROOT / "terminx").rglob("*.py")
+    )
     return set(re.findall(r'(?<![A-Za-z0-9_])t\(["\']([^"\']+)["\']', text))
 
 
 def _catalog(name: str) -> dict:
-    return json.loads((ROOT / "terminx" / "locales" / f"{name}.json").read_text(encoding="utf-8"))
+    return json.loads(
+        (ROOT / "terminx" / "locales" / f"{name}.json").read_text(encoding="utf-8")
+    )
 
 
 class CatalogTest(unittest.TestCase):
@@ -27,27 +32,75 @@ class CatalogTest(unittest.TestCase):
 
     def test_catalog_keys_are_reachable(self):
         dyn = {
-            "working", "blocked", "idle", "running", "offline",
-            "weekly", "5h", "7d", "7d sonnet", "7d opus", "limit",
-            "[green]{working} working[/] · [yellow]{blocked} blocked[/] · [cyan]{running} running[/]",
-            "scan: {time}", "refresh {sec}s",
+            "working",
+            "blocked",
+            "idle",
+            "running",
+            "offline",
+            "weekly",
+            "5h",
+            "7d",
+            "7d sonnet",
+            "7d opus",
+            "limit",
+            "{working} active · {blocked} need you · {running} other recent",
+            "scan: {time}",
+            "refresh {sec}s",
             "✎ note for [bold]{agent}[/] ({cwd}): ",
-            "agent:", "status:", "model:", "provider:", "directory:",
-            "branch:", "pid:", "plan:", "session:", "note:",
+            "agent:",
+            "status:",
+            "model:",
+            "provider:",
+            "directory:",
+            "branch:",
+            "pid:",
+            "plan:",
+            "session:",
+            "note:",
         }
         for key in dyn:
             self.assertIn(key, _catalog("zh_CN"))
 
     def test_no_dead_keys(self):
-        dead = set(_catalog("zh_CN")) - _t_keys() - {
-            "working", "blocked", "idle", "running", "offline",
-            "weekly", "5h", "7d", "7d sonnet", "7d opus", "limit",
-            "[green]{working} working[/] · [yellow]{blocked} blocked[/] · [cyan]{running} running[/]",
-            "scan: {time}", "refresh {sec}s",
-            "✎ note for [bold]{agent}[/] ({cwd}): ",
-            "agent:", "status:", "model:", "provider:", "directory:",
-            "branch:", "pid:", "plan:", "session:", "note:",
+        # Desktop status labels, filter options and provider reasons use t(variable).
+        literals = {
+            node.value
+            for p in (ROOT / "terminx").rglob("*.py")
+            for node in ast.walk(ast.parse(p.read_text(encoding="utf-8")))
+            if isinstance(node, ast.Constant) and isinstance(node.value, str)
         }
+        dead = (
+            set(_catalog("zh_CN"))
+            - _t_keys()
+            - literals
+            - {
+                "working",
+                "blocked",
+                "idle",
+                "running",
+                "offline",
+                "weekly",
+                "5h",
+                "7d",
+                "7d sonnet",
+                "7d opus",
+                "limit",
+                "[green]{working} working[/] · [yellow]{blocked} blocked[/] · [cyan]{running} running[/]",
+                "scan: {time}",
+                "refresh {sec}s",
+                "✎ note for [bold]{agent}[/] ({cwd}): ",
+                "agent:",
+                "status:",
+                "model:",
+                "provider:",
+                "directory:",
+                "branch:",
+                "pid:",
+                "plan:",
+                "session:",
+                "note:",
+            }
+        )
         self.assertEqual(dead, set())
 
 
@@ -64,11 +117,16 @@ class TranslatorTest(unittest.TestCase):
 
     def test_placeholder_formatting(self):
         i18n.set_language("zh_CN")
-        self.assertEqual(i18n.t("resets in {days}d {hours}h", days=1, hours=2), "重置剩余 1 天 2 小时")
+        self.assertEqual(
+            i18n.t("resets in {days}d {hours}h", days=1, hours=2),
+            "重置剩余 1 天 2 小时",
+        )
 
     def test_unknown_language_falls_back(self):
         i18n.set_language("xx_YY")
-        self.assertEqual(i18n.t("working"), "工作中" if i18n._lang == "zh_CN" else "working")
+        self.assertEqual(
+            i18n.t("working"), "工作中" if i18n._lang == "zh_CN" else "working"
+        )
 
 
 class DetectionTest(unittest.TestCase):

@@ -3,6 +3,14 @@ from ctypes import wintypes
 
 user32 = ctypes.windll.user32
 kernel32 = ctypes.windll.kernel32
+user32.GetForegroundWindow.restype = wintypes.HWND
+user32.SetForegroundWindow.argtypes = [wintypes.HWND]
+user32.ShowWindow.argtypes = [wintypes.HWND, ctypes.c_int]
+user32.IsIconic.argtypes = [wintypes.HWND]
+user32.IsWindowVisible.argtypes = [wintypes.HWND]
+user32.GetClassNameW.argtypes = [wintypes.HWND, wintypes.LPWSTR, ctypes.c_int]
+user32.GetParent.argtypes = [wintypes.HWND]
+user32.GetParent.restype = wintypes.HWND
 
 TERMINAL_PROCS = {"windowsterminal.exe", "conhost.exe", "openconsole.exe"}
 
@@ -85,7 +93,7 @@ def _title_score(title: str, strong: list[str], weak: list[str]) -> int:
 
 
 def _tab_of_process(pid: int) -> int | None:
-    """Map an agent process to its visible terminal tab window via the console-owning ancestor."""
+    """Map an agent process to its terminal tab through the console owner."""
     chain = _ancestors(pid)
     win_pids = _window_pids()
     by_pid: dict[int, int] = {}
@@ -117,7 +125,9 @@ def pid_cwd_matches(pid: int | None, cwd: str | None) -> bool:
         return False
 
 
-def find_terminal_window(strong: list[str], weak: list[str], agent_pid: int | None = None) -> int | None:
+def find_terminal_window(
+    strong: list[str], weak: list[str], agent_pid: int | None = None
+) -> int | None:
     """Find the terminal window (tab) hosting the session.
 
     Primary: walk the agent process's ancestor chain to its console-owning
@@ -147,10 +157,33 @@ def find_terminal_window(strong: list[str], weak: list[str], agent_pid: int | No
     return best if best_score > 0 else None
 
 
-def focus_window(hwnd: int) -> None:
+def focus_window(hwnd: int) -> bool:
     if user32.IsIconic(hwnd):
         user32.ShowWindow(hwnd, 9)
     user32.ShowWindow(hwnd, 5)
     user32.SetForegroundWindow(hwnd)
-    user32.keybd_event(0x12, 0, 0, 0)
-    user32.keybd_event(0x12, 0, 2, 0)
+    return user32.GetForegroundWindow() == hwnd
+
+
+def native_console_for_pid(hwnd, pid):
+    if not user32.IsWindowVisible(hwnd):
+        return False
+    name = ctypes.create_unicode_buffer(256)
+    user32.GetClassNameW(hwnd, name, 256)
+    if name.value != "ConsoleWindowClass":
+        return False
+    from .live import console_for_pid
+
+    return console_for_pid(pid) == hwnd
+
+
+def pseudo_console_owner(hwnd, pid):
+    from .live import console_for_pid
+
+    name = ctypes.create_unicode_buffer(256)
+    user32.GetClassNameW(hwnd, name, len(name))
+    if name.value != "PseudoConsoleWindow" or console_for_pid(pid) != hwnd:
+        return 0
+    owner = user32.GetParent(hwnd)
+    user32.GetClassNameW(owner, name, len(name))
+    return owner if name.value == "CASCADIA_HOSTING_WINDOW_CLASS" else 0

@@ -1,222 +1,116 @@
-<div align="center">
+# termiX
 
-# 🖥️ termiX
+termiX shows open AI CLI sessions in a Windows sidebar.
+It also has a terminal dashboard.
+The supported CLIs are Codex, Claude Code, Kimi Code, Grok Build, and OpenCode.
+The interface has English and Simplified Chinese text.
 
-**One terminal to watch them all.**
+## Install
 
-A live dashboard for your CLI coding agents — **Codex, OpenCode, Claude Code, Kimi** — showing what every agent is doing right now, in one terminal.
+Use Windows 10 version 1809 or later, or Windows 11, on an x64 computer.
+Install each required CLI.
+Sign in to each CLI before you use its account data.
+Install Windows Terminal to open new sessions from termiX.
 
-![Python](https://img.shields.io/badge/python-3.10%2B-blue)
-![Platform](https://img.shields.io/badge/platform-Windows-blueviolet)
-![License](https://img.shields.io/badge/license-MIT-green)
-![Version](https://img.shields.io/badge/version-0.1.0-orange)
+1. Open the [release page](https://github.com/B143KC47/terminx/releases/latest).
+2. Download `terminx-0.3.0-windows-x64-setup.exe`.
+3. Open the installation file.
+4. Complete the installation procedure.
+5. Open **termiX** from the Start menu.
 
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│ termiX — open terminals  1 working · 0 blocked · 2 running                  │
-└─ scan: 15:43:07 · refresh 3s · ↑↓ select · ←→ view · Enter pop · n note · c ─┘
-                                                                               
-        agent      status                 model              directory        
- ───────────────────────────────────────────────────────────────────────────── 
- ▸      opencode   ● working              deepseek-v4-flas   C:\Users\you  \…
-        codex      ■ blocked (waiting     gpt-5.6-sol        …\diffusion_rese…
-                   423s)                                                       
-        kimi       ○ idle                 kimi-k2-0711       …\site_rebuild    
-```
+The installer contains Python and the desktop libraries.
+It installs for the current user without administrator access.
+It starts termiX after Windows sign-in by default.
+For the ZIP, wheel, or source package, see [Installation](docs/installation.md).
 
-</div>
+## Change start at sign-in
 
-**Languages / 语言:** English · [简体中文](README.zh_CN.md)
+1. Open the sidebar menu.
+2. Select **Settings and integrations**.
+3. Set **Start termiX when I sign in to Windows** to the required state.
+4. Select **Save**.
 
----
+Windows starts the sidebar after the user signs in.
+An update keeps the selected setting.
+The ZIP and Python packages do not change this setting during installation.
 
-## ✨ Features
+## Use the sidebar
 
-- **Live terminal overview** — every agent session currently open on your machine:
-  status (`● working` / `■ blocked` / `○ idle`), model in use, working directory, git branch
-- **Pop into the real terminal** — `Enter` brings the selected session's terminal
-  window to the foreground (Windows Terminal), resuming the exact same conversation
-- **Account quota at a glance** — official subscription limits (5h / weekly / monthly)
-  straight from the provider APIs: `OK` / `NEAR` / `HIT` + reset countdown
-- **Per-terminal notes** — jot down what each agent is working on; notes persist
-- **Per-agent colors** — auto-assigned palette, or cycle with `c` and save
-- **Internationalized** — English & 简体中文 built in; language auto-detected from
-  your system locale, override anytime in the config
-- **Pluggable adapters** — adding a new CLI agent is ~30 lines
+The sidebar starts as a small rail.
+Its number shows the count of open CLI terminals.
+Select the rail to open the panel.
+Drag the rail or panel header to change its position.
 
-## 📦 Requirements
+Select a session to focus its existing terminal.
+The panel closes after a successful focus action.
+Select the details icon to see the session ID, folder, state, public output, and notes.
+Select **New** to start a CLI in a new Windows Terminal window.
 
-- Windows (Windows Terminal recommended) — macOS/Linux: status detection works,
-  "pop into terminal" falls back to spawning a new window
-- Python 3.10+
-- One or more of: [Codex](https://github.com/openai/codex),
-  [OpenCode](https://opencode.ai), [Claude Code](https://docs.claude.com),
-  [Kimi Code](https://www.kimi.com/code)
+| Control | Action |
+|---|---|
+| Session row | Focus the existing terminal |
+| Details icon | Open session details |
+| `Ctrl+F` | Select the search field |
+| `Ctrl+N` | Open the new session dialog |
+| `Esc` | Close the panel to the rail |
+| Account quota | Show account limits |
+| Tray menu | Open settings or quit |
 
-## 🚀 Install
+## Session evidence
+
+Codex uses live processes, open session files, and native log events.
+Codex does not need termiX hooks.
+Claude, Kimi, and Grok have optional hooks in **Settings and integrations**.
+OpenCode can show an open terminal without an exact native session association.
+
+termiX uses the CLI, data home, and native session ID to identify each session.
+It uses the process creation time to reject a reused process ID.
+It does not select a session from its folder or a similar terminal title.
+It reports unknown state when evidence is missing.
+Silence does not show that a task is complete.
+
+Account quota, session token counts, and context usage are different values.
+Missing quota is not zero quota.
+An unsuccessful refresh keeps the last value with a stale marker.
+See [CLI integrations](docs/integrations.md) for provider limits.
+
+## Local data
+
+termiX stores settings and notes in the current user's data directory.
+It does not send telemetry.
+The event journal stores metadata, not prompts, tool arguments, or credentials.
+The details view reads public output from local CLI logs.
+It excludes private reasoning and tool payloads.
+See [Configuration](docs/configuration.md) and [Security](SECURITY.md).
+
+## Development
+
+Use Python 3.11 or later for a source installation.
+Use the locked Python 3.12 environment for release builds.
 
 ```powershell
-pip install rich
 git clone https://github.com/B143KC47/terminx.git
 cd terminx
-pip install -e .
+uv sync --locked --extra desktop --extra dev --extra package
+uv run python scripts/check_docs.py
+uv run ruff check terminx tests scripts packaging
+uv run python -m unittest discover -s tests
 ```
 
-Then run from anywhere:
+See [Development](docs/development.md), [Architecture](docs/architecture.md), and [Release procedure](docs/release.md).
+The [review record](docs/review.md) gives findings and evidence limits.
+The [validation record](docs/sidebar-validation.md) gives the observed checks.
 
-```powershell
-terminx              # live dashboard (q to quit)
-terminx --once       # render a single frame and exit
-```
+## Documentation
 
-## 🎮 Controls
+Project English documentation uses ASD-STE100 Issue 9 writing rules.
+The [writing policy](docs/writing-policy.md) defines the terms and review procedure.
+Automatic checks cover selected rules.
+They do not establish full dictionary or grammar compliance.
+Upstream license text keeps its original wording.
 
-| Key | Action |
-|---|---|
-| `↑` / `↓` | move cursor between sessions |
-| `←` / `→` | switch between **terminals** view and **account usage** view |
-| `Enter` | pop the selected terminal to the foreground (focus existing window, or open + resume a new one) |
-| `n` | write a note for the selected terminal (Enter save · Esc cancel) |
-| `c` | cycle the selected agent's color |
-| `d` | toggle details panel |
-| `q` | quit |
+## License
 
-## 📊 What each view shows
-
-### Open terminals
-
-Only sessions that are **actually running right now** — stale session files are
-filtered out by matching each session's working directory against live processes.
-
-| column | meaning |
-|---|---|
-| agent | name, colored per agent; `✎` = has a note |
-| status | `● working` (session file updated recently) · `■ blocked` (running, waiting on you — includes permission prompts) · `○ idle` |
-| model | parsed from the agent's own session files |
-| directory | working directory (+ git branch in magenta) |
-
-### Account usage
-
-Official subscription quota **only** — no local estimation, and your local model
-configuration (e.g. a router/proxy setup) has no influence.
-
-| status | meaning |
-|---|---|
-| `OK` | under 80% of the window |
-| `NEAR` | 80–90% |
-| `HIT` | ≥90% (you'll be cut off until reset) |
-
-Sources per agent:
-
-| agent | source | extra setup |
-|---|---|---|
-| codex | `chatgpt.com/backend-api/wham/usage` (reads `~/.codex/auth.json`) | none — works after `codex login` |
-| claude | `api.anthropic.com/api/oauth/usage` | only when logged in via OAuth (`claude login`); proxied/router setups show "no official quota data" |
-| kimi | `api.kimi.com/coding/v1/usages` | set `kimi_api_key` (create at [Kimi Code console](https://www.kimi.com/code/console) → API Keys) |
-| opencode | none (BYO provider key) | — |
-
-## ⚙️ Configuration
-
-Create `~/.terminx.json` (or `~/.config/terminx/config.json`). Full example:
-`terminx/config.example.json`.
-
-```json
-{
-  "lang": "auto",
-  "refresh_sec": 3,
-  "working_threshold_sec": 60,
-  "blocked_threshold_sec": 600,
-  "show_recent_hours": 24,
-  "max_rows_per_agent": 6,
-  "colors": { "codex": "yellow", "claude": "magenta" },
-  "kimi_api_key": "sk-kimi-...",
-  "paths": {}
-}
-```
-
-- `lang` — UI language: `"auto"` (detect from system locale) · `"en"` · `"zh_CN"`.
-  You can also force it per-run: `set LANG=en_US && terminx`
-- `colors` — fixed per-agent colors (otherwise auto-assigned; `c` cycles live)
-- `kimi_api_key` — optional, enables official Kimi quota
-- `paths` — override an agent's data directory, e.g. `{"codex": "D:/codex-data"}`
-
-## 🌐 Adding a language
-
-Translations live in `terminx/locales/<code>.json` as simple key→text maps, where
-the key is the original English string. To add a language:
-
-1. Copy `terminx/locales/zh_CN.json` to `terminx/locales/<code>.json`
-2. Translate the values (keep `{placeholders}` and rich markup like `[bold]…[/]` intact)
-3. Add the code to `SUPPORTED` in `terminx/i18n.py`
-4. Set `"lang": "<code>"` in your config to try it
-
-For the docs, translate `README.md` into `README.<code>.md` (e.g.
-`README.zh_CN.md`) and add it to the language links at the top of each README.
-
-## 🔐 Privacy
-
-- API tokens are read from your local auth files and used **only inside HTTP
-  headers** — never printed, logged, displayed, or stored by termiX
-- Notes and color choices are saved to `~/.config/terminx/state.json`
-- No telemetry, no network calls except the official quota endpoints you enable
-
-## 🧩 Adding a new agent (developers)
-
-Create `terminx/agents/<name>.py` with an `AgentAdapter` subclass:
-
-```python
-from .base import AgentAdapter, SessionInfo, Quota
-
-class MyAgent(AgentAdapter):
-    name = "myagent"
-    process_names = ["myagent"]
-
-    def find_sessions(self, cfg) -> list[SessionInfo]:
-        ...  # -> sessions with cwd, model, last_activity, resume_cmd
-
-    def usage_records(self, since, cfg) -> list:
-        ...  # optional, not used for quota display anymore
-
-    def quota(self, cfg) -> Quota | None:
-        ...  # optional — official quota from the provider's API
-```
-
-Register it in `terminx/agents/__init__.py`. Status detection, git branch, PID
-resolution, and quota caching come free from the base class.
-
-## 🏗️ Architecture
-
-```
-terminx/
-├── agents/            # one adapter per CLI agent (codex, claude, opencode, kimi)
-│   ├── base.py        # AgentAdapter ABC: sessions, status, resolve_pid
-│   └── quota.py       # official quota fetchers (cached 120s)
-├── core/              # processes (tasklist), git branch, win32 window-focus, state
-├── i18n.py            # language detection + catalog loader
-├── locales/           # translation catalogs (zh_CN.json; English is embedded)
-└── ui/
-    ├── dashboard.py   # rich Live TUI: key handling, views, notes, colors
-    └── colors.py      # per-agent palette
-```
-
-Key design points:
-
-- **Status truth** — a session is shown only when a live process exists in its
-  exact working directory (`pid ↔ cwd` matching), so the count always equals
-  what `tasklist` says
-- **Responsive UI** — scanning runs in a background thread; keystrokes are
-  handled every 50ms, so the UI never blocks on disk/network scans
-- **Quota = official only** — provider APIs are the single source of truth
-
-## 🧪 Development
-
-```powershell
-pip install -e . pyflakes
-python -m pyflakes terminx   # lint
-python -m unittest discover -s tests   # i18n sanity tests
-python -m terminx --once     # smoke test
-```
-
-## 📄 License
-
-[MIT](LICENSE)
+The project source uses the [MIT license](LICENSE).
+The Windows packages include third-party license files.
+See [Third-party software](docs/third-party.md).

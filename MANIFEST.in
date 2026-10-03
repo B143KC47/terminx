@@ -1,0 +1,6 @@
+include LICENSE README.md README.zh_CN.md CHANGELOG.md CONTRIBUTING.md SECURITY.md uv.lock
+recursive-include docs *.md
+recursive-include packaging *.py *.spec *.iss
+recursive-include scripts *.py
+recursive-include tests *.py
+recursive-include .github *.yml *.md

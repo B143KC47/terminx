@@ -5,6 +5,12 @@ __pycache__/
 .eggs/
 build/
 dist/
+_artifacts/
+.serena/
+.coverage
+coverage.xml
+htmlcov/
+.ruff_cache/
 
 # Virtual envs
 .venv/

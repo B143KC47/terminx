@@ -1,9 +1,10 @@
 import json
+import os
 import re
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from ..core.processes import running_pids_with_cwd, normalize_path
+from ..core.paths import provider_home
 from ..core.usage import (
     UsageRecord,
     cached_json_parse,
@@ -22,37 +23,48 @@ class CodexAdapter(AgentAdapter):
     process_names = ["codex", "codex-code-mode-host"]
     primary_process = "codex"
 
-    def resolve_pid(self, s: SessionInfo) -> int | None:
-        if not s.cwd:
-            return None
-        procs = running_pids_with_cwd(["codex", "codex.exe", "codex-code-mode-host", "codex-code-mode-host.exe"])
-        target = normalize_path(s.cwd)
-        for pid, cwd in procs.items():
-            if normalize_path(cwd) == target:
-                return pid
-        return None
-
     def quota(self, cfg: dict) -> Quota | None:
         return fetch_codex_quota(cfg)
 
     def _root(self, cfg: dict) -> Path:
-        return Path(cfg.get("paths", {}).get("codex", Path.home() / ".codex" / "sessions"))
+        path = Path(cfg.get("paths", {}).get("codex") or provider_home("codex"))
+        return path / "sessions" if (path / "sessions").is_dir() else path
 
     def _rollout_files(self, root: Path, since: datetime) -> list[Path]:
-        out = []
-        for year in root.iterdir():
+        out: list[tuple[float, Path]] = []
+        since_ts = since.timestamp()
+
+        def entries(path) -> list[os.DirEntry]:
+            try:
+                with os.scandir(path) as iterator:
+                    return list(iterator)
+            except OSError:
+                return []
+
+        for year in entries(root):
             if not year.is_dir():
                 continue
-            for month in year.iterdir():
+            for month in entries(year.path):
                 if not month.is_dir():
                     continue
-                for p in month.glob("*/rollout-*.jsonl"):
-                    try:
-                        if mtime_utc(p) >= since:
-                            out.append(p)
-                    except OSError:
+                for day in entries(month.path):
+                    if not day.is_dir():
                         continue
-        return out
+                    for entry in entries(day.path):
+                        if not (
+                            entry.is_file()
+                            and entry.name.startswith("rollout-")
+                            and entry.name.endswith(".jsonl")
+                        ):
+                            continue
+                        try:
+                            modified = entry.stat().st_mtime
+                        except OSError:
+                            continue
+                        if modified >= since_ts:
+                            out.append((modified, Path(entry.path)))
+        out.sort(key=lambda item: item[0], reverse=True)
+        return [path for _, path in out]
 
     def find_sessions(self, cfg: dict) -> list[SessionInfo]:
         root = self._root(cfg)
@@ -61,32 +73,43 @@ class CodexAdapter(AgentAdapter):
         hours = cfg.get("show_recent_hours", 24)
         since = utcnow() - timedelta(hours=hours)
         files = self._rollout_files(root, since)
-        files.sort(key=lambda p: p.stat().st_mtime, reverse=True)
 
         seen: dict[str, SessionInfo] = {}
         for f in files:
-            meta = cached_json_parse(f, self._read_meta)
-            if not meta:
+            session = self.session_from_file(f, root)
+            if not session:
                 continue
-            cwd = meta.get("cwd")
-            if not cwd:
-                continue
-            key = str(cwd).lower()
+            key = session.session_id
             if key in seen:
                 continue
-            last = mtime_utc(f)
-            seen[key] = SessionInfo(
-                agent=self.name,
-                cwd=cwd,
-                model=meta.get("model"),
-                last_activity=last,
-                source=str(f),
-                detail=meta.get("cli_version", "") or "",
-                resume_cmd=["codex", "resume", _session_id(f.stem)],
-            )
-            if len(seen) >= cfg.get("max_rows_per_agent", 6):
-                break
+            seen[key] = session
         return list(seen.values())
+
+    def session_from_file(self, file, root=None):
+        file = Path(file)
+        meta = cached_json_parse(file, self._read_meta)
+        if (
+            not meta
+            or not meta.get("cwd")
+            or meta.get("thread_source") not in {None, "cli"}
+        ):
+            return None
+        if root is None:
+            root = next((p for p in file.parents if p.name == "sessions"), file.parent)
+        sid = meta.get("id") or _session_id(file.stem)
+        return SessionInfo(
+            self.name,
+            cwd=meta["cwd"],
+            model=meta.get("model"),
+            last_activity=mtime_utc(file),
+            source=str(file),
+            session_id=sid,
+            data_root=str(root.parent if root.name == "sessions" else root),
+            activity_path=str(file),
+            parent_id=meta.get("parent_id"),
+            detail=meta.get("cli_version") or "",
+            resume_cmd=["codex", "resume", sid],
+        )
 
     @staticmethod
     def _read_meta(f: Path) -> dict:
@@ -96,14 +119,32 @@ class CodexAdapter(AgentAdapter):
                 obj = json.loads(line)
             except json.JSONDecodeError:
                 continue
+            if not isinstance(obj, dict) or not isinstance(
+                obj.get("payload", {}), dict
+            ):
+                continue
             kind = obj.get("type")
             payload = obj.get("payload") or {}
             if kind == "session_meta":
+                meta["id"] = payload.get("id")
+                source = payload.get("source")
+                meta["thread_source"] = (
+                    source
+                    if isinstance(source, str)
+                    else "subagent"
+                    if source
+                    else None
+                )
+                meta["parent_id"] = payload.get("forked_from_id") or payload.get(
+                    "parent_id"
+                )
                 if payload.get("cwd"):
                     meta["cwd"] = payload["cwd"]
                 if payload.get("cli_version"):
                     meta["cli_version"] = payload["cli_version"]
-            elif kind == "event_msg" and payload.get("type") == "thread_settings_applied":
+            elif (
+                kind == "event_msg" and payload.get("type") == "thread_settings_applied"
+            ):
                 model = payload.get("thread_settings", {}).get("model")
                 if model:
                     meta["model"] = model
@@ -115,8 +156,15 @@ class CodexAdapter(AgentAdapter):
                     obj = json.loads(line)
                 except json.JSONDecodeError:
                     continue
+                if not isinstance(obj, dict) or not isinstance(
+                    obj.get("payload", {}), dict
+                ):
+                    continue
                 payload = obj.get("payload") or {}
-                if obj.get("type") == "event_msg" and payload.get("type") == "thread_settings_applied":
+                if (
+                    obj.get("type") == "event_msg"
+                    and payload.get("type") == "thread_settings_applied"
+                ):
                     model = payload.get("thread_settings", {}).get("model")
                     if model:
                         meta["model"] = model
@@ -180,7 +228,9 @@ _TS_RE = re.compile(r'"timestamp":"([\dT:.Z-]+)"')
 
 
 def _session_id(stem: str) -> str:
-    m = re.search(r"([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$", stem)
+    m = re.search(
+        r"([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$", stem
+    )
     return m.group(1) if m else stem
 
 

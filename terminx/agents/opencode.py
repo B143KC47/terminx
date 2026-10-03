@@ -1,7 +1,6 @@
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from ..core.processes import running_pids_with_cwd, normalize_path
 from ..core.usage import cached_json_parse, parse_ts, utcnow
 from ..i18n import t
 from .base import AgentAdapter, SessionInfo
@@ -28,18 +27,10 @@ class OpenCodeAdapter(AgentAdapter):
     process_names = ["opencode"]
     primary_process = "opencode"
 
-    def resolve_pid(self, s: SessionInfo) -> int | None:
-        if not s.cwd:
-            return None
-        procs = running_pids_with_cwd(["opencode", "opencode.exe"])
-        target = normalize_path(s.cwd)
-        for pid, cwd in procs.items():
-            if normalize_path(cwd) == target:
-                return pid
-        return None
-
     def _root(self, cfg: dict) -> Path:
-        return Path(cfg.get("paths", {}).get("opencode", Path.home() / ".local/share/opencode"))
+        return Path(
+            cfg.get("paths", {}).get("opencode", Path.home() / ".local/share/opencode")
+        )
 
     def _log_path(self, cfg: dict) -> Path:
         return self._root(cfg) / "log" / "opencode.log"
@@ -101,6 +92,8 @@ class OpenCodeAdapter(AgentAdapter):
             rows.append(
                 SessionInfo(
                     agent=self.name,
+                    session_id=entry["id"],
+                    data_root=str(self._root(cfg)),
                     cwd=entry.get("directory"),
                     model=entry.get("model"),
                     provider=entry.get("provider"),
@@ -110,8 +103,11 @@ class OpenCodeAdapter(AgentAdapter):
                     resume_cmd=["opencode", "--session", entry.get("id", "")],
                 )
             )
-        rows.sort(key=lambda s: s.last_activity or datetime.min.replace(tzinfo=timezone.utc), reverse=True)
-        return rows[: cfg.get("max_rows_per_agent", 6)]
+        rows.sort(
+            key=lambda s: s.last_activity or datetime.min.replace(tzinfo=timezone.utc),
+            reverse=True,
+        )
+        return rows
 
     def usage_records(self, since: datetime, cfg: dict) -> list:
         return []

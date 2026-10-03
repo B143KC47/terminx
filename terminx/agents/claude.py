@@ -2,7 +2,6 @@ import json
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from ..core.processes import running_pids_with_cwd, normalize_path
 from ..core.usage import (
     UsageRecord,
     cached_json_parse,
@@ -13,9 +12,9 @@ from ..core.usage import (
     read_tail,
     utcnow,
 )
+from ..i18n import t
 from .base import AgentAdapter, Quota, SessionInfo
 from .quota import fetch_claude_quota
-from ..i18n import t
 
 CACHE_READ_KEYS = (
     "cache_read_input_tokens",
@@ -29,16 +28,6 @@ class ClaudeAdapter(AgentAdapter):
     process_names = ["claude"]
     primary_process = "claude"
 
-    def resolve_pid(self, s: SessionInfo) -> int | None:
-        if not s.cwd:
-            return None
-        procs = running_pids_with_cwd(["claude", "claude.exe"])
-        target = normalize_path(s.cwd)
-        for pid, cwd in procs.items():
-            if normalize_path(cwd) == target:
-                return pid
-        return None
-
     def _root(self, cfg: dict) -> Path:
         return Path(cfg.get("paths", {}).get("claude", Path.home() / ".claude"))
 
@@ -50,6 +39,7 @@ class ClaudeAdapter(AgentAdapter):
         since = utcnow() - timedelta(hours=hours)
 
         rows: list[SessionInfo] = []
+        fallback_model = self._settings_model(cfg)
         for proj in root.iterdir():
             if not proj.is_dir():
                 continue
@@ -59,19 +49,29 @@ class ClaudeAdapter(AgentAdapter):
                 continue
             if not files:
                 continue
-            newest = max(files, key=lambda p: p.stat().st_mtime)
-            last = mtime_utc(newest)
-            if last < since:
-                continue
-            info = self._read_session(newest, last, self._settings_model(cfg))
-            if info:
-                rows.append(info)
-        rows.sort(key=lambda s: s.last_activity or datetime.min.replace(tzinfo=timezone.utc), reverse=True)
-        return rows[: cfg.get("max_rows_per_agent", 6)]
+            for file in files:
+                try:
+                    last = mtime_utc(file)
+                    if last < since:
+                        continue
+                    info = self._read_session(file, last, fallback_model)
+                    if info:
+                        info.data_root = str(self._root(cfg))
+                        rows.append(info)
+                except OSError:
+                    continue
+        rows.sort(
+            key=lambda s: s.last_activity or datetime.min.replace(tzinfo=timezone.utc),
+            reverse=True,
+        )
+        return rows
 
     @staticmethod
     def _settings_model(cfg: dict) -> str | None:
-        settings = Path(cfg.get("paths", {}).get("claude", Path.home() / ".claude")) / "settings.json"
+        settings = (
+            Path(cfg.get("paths", {}).get("claude", Path.home() / ".claude"))
+            / "settings.json"
+        )
         if not settings.exists():
             return None
         try:
@@ -81,7 +81,9 @@ class ClaudeAdapter(AgentAdapter):
         except (OSError, json.JSONDecodeError):
             return None
 
-    def _read_session(self, f: Path, last: datetime, fallback_model: str | None = None) -> SessionInfo | None:
+    def _read_session(
+        self, f: Path, last: datetime, fallback_model: str | None = None
+    ) -> SessionInfo | None:
         meta = cached_json_parse(f, self._read_session_tail)
         cwd = meta.get("cwd")
         if not cwd:
@@ -96,6 +98,8 @@ class ClaudeAdapter(AgentAdapter):
             model=model,
             last_activity=last,
             source=str(f),
+            session_id=f.stem,
+            activity_path=str(f),
             detail=detail,
             resume_cmd=["claude", "-r", f.stem],
         )
@@ -110,11 +114,13 @@ class ClaudeAdapter(AgentAdapter):
                 obj = json.loads(line)
             except json.JSONDecodeError:
                 continue
+            if not isinstance(obj, dict):
+                continue
             kind = obj.get("type")
             if isinstance(obj.get("cwd"), str):
                 cwd = obj["cwd"]
             if kind == "assistant":
-                msg = obj.get("message") or {}
+                msg = obj.get("message") if isinstance(obj.get("message"), dict) else {}
                 if msg.get("model"):
                     model = msg["model"]
                 waiting = False

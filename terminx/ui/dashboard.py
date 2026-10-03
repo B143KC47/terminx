@@ -1,6 +1,5 @@
 import queue
 import shutil
-import subprocess
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -16,9 +15,13 @@ from rich.table import Table
 from rich.text import Text
 
 from ..agents.base import AgentAdapter, SessionInfo
+from ..agents.quota import collect_quotas
 from ..config import load_config
+from ..core.events import ACTIVE, ATTENTION, LABELS
 from ..core.gitutil import git_branch
+from ..core.monitor import Monitor, collect_sessions
 from ..core.state import load_state, save_state
+from ..core.terminals import TerminalLocator
 from ..core.usage import utcnow
 from ..i18n import set_language, t
 from .colors import agent_color, cycle_color
@@ -40,13 +43,24 @@ STATUS_GLYPH = {
 }
 
 
+STATUS_STYLE.update(
+    {
+        key: (
+            "yellow" if key in ATTENTION else "green" if key in ACTIVE else "cyan",
+            value,
+        )
+        for key, value in LABELS.items()
+    }
+)
+
+
 def _limit_status(pct: float | None, hit: bool = False) -> Text:
     if hit:
         return Text("HIT", style="bold red")
     if pct is None:
         return Text(t("n/a"), style="dim")
     if pct >= 90:
-        label, style = "HIT", "bold red"
+        label, style = "HIGH", "bold yellow"
     elif pct >= 80:
         label, style = "NEAR", "yellow"
     else:
@@ -54,10 +68,10 @@ def _limit_status(pct: float | None, hit: bool = False) -> Text:
     return Text(f"{label} {pct:.0f}%", style=style)
 
 
-def _usage_window_cell(win) -> Text:
+def _usage_window_cell(win, hit=False) -> Text:
     t_row = Text()
     t_row.append(f"{t(win.label)}: ")
-    t_row.append(_limit_status(win.pct))
+    t_row.append(_limit_status(win.pct, hit))
     if win.countdown:
         t_row.append(f" ({win.countdown})", style="dim")
     return t_row
@@ -84,9 +98,12 @@ class Dashboard:
         self.detail = False
         self._stop = threading.Event()
         self._lock = threading.Lock()
+        self._render_needed = threading.Event()
         self._keys: "queue.Queue[str]" = queue.Queue()
         self._last_scan: datetime | None = None
-        self._errors: list[str] = []
+        self._last_usage_scan: datetime | None = None
+        self._session_errors: list[str] = []
+        self._usage_errors: list[str] = []
         self._rows: list[SessionInfo] = []
         self._usage_rows: list[dict] = []
         self._pop_status: str | None = None
@@ -96,41 +113,79 @@ class Dashboard:
         self._colors: dict[str, str] = self._state.setdefault("colors", {})
         self._note_edit: str | None = None
         self._note_key: str | None = None
+        self._render_needed.set()
+        self._monitor = (
+            Monitor(adapters, cfg)
+            if all(isinstance(a, AgentAdapter) for a in adapters)
+            else None
+        )
 
     def scan(self) -> None:
-        rows: list[SessionInfo] = []
-        usage_rows: list[dict] = []
-        errors: list[str] = []
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            sessions = pool.submit(self.scan_sessions)
+            usage = pool.submit(self.scan_usage)
+            sessions.result()
+            usage.result()
 
-        def scan_adapter(adapter: AgentAdapter) -> tuple[list[SessionInfo], dict, list[str]]:
-            try:
-                sessions = adapter.sessions(self.cfg)
-                for s in sessions:
-                    s.branch = git_branch(Path(s.cwd)) if s.cwd else None
-                quota = adapter.quota(self.cfg)
-                usage_row = {
-                    "agent": adapter.name,
-                    "quota": quota,
-                }
-                live = [s for s in sessions if s.status != "offline"]
-                return live, usage_row, []
-            except Exception as e:
-                return [], {}, [f"{adapter.name}: {e}"]
+    @staticmethod
+    def _session_key(session: SessionInfo) -> tuple:
+        return session.key
 
-        with ThreadPoolExecutor(max_workers=len(self.adapters)) as pool:
-            results = list(pool.map(scan_adapter, self.adapters))
-        for live, usage_row, errs in results:
-            rows.extend(live)
-            if usage_row:
-                usage_rows.append(usage_row)
-            errors.extend(errs)
-        rows.sort(key=lambda r: (r.last_activity or utcnow()), reverse=True)
+    def scan_sessions(self) -> None:
+        rows, errors = (
+            self._monitor.scan()
+            if self._monitor
+            else collect_sessions(self.adapters, self.cfg)
+        )
+        for row in rows:
+            row.branch = git_branch(Path(row.cwd)) if row.cwd else None
+        rows.sort(key=lambda r: r.last_activity or utcnow(), reverse=True)
         with self._lock:
+            selected = None
+            if self.view == "terminals" and self._rows:
+                index = min(self.cursor, len(self._rows) - 1)
+                selected = self._session_key(self._rows[index])
             self._rows = rows
-            self._usage_rows = usage_rows
-            self._errors = errors
+            self._session_errors = errors
             self._last_scan = utcnow()
-        self._clamp_cursor()
+            if self.view == "terminals":
+                if selected is not None:
+                    self.cursor = next(
+                        (
+                            i
+                            for i, row in enumerate(rows)
+                            if self._session_key(row) == selected
+                        ),
+                        self.cursor,
+                    )
+                self.cursor = max(0, min(self.cursor, len(rows) - 1)) if rows else 0
+        self._render_needed.set()
+
+    def scan_usage(self) -> None:
+        usage_rows = collect_quotas(self.adapters, self.cfg)
+        errors = []
+        with self._lock:
+            selected = None
+            if self.view == "usage" and self._usage_rows:
+                index = min(self.cursor, len(self._usage_rows) - 1)
+                selected = self._usage_rows[index]["agent"]
+            self._usage_rows = usage_rows
+            self._usage_errors = errors
+            self._last_usage_scan = utcnow()
+            if self.view == "usage":
+                if selected is not None:
+                    self.cursor = next(
+                        (
+                            i
+                            for i, row in enumerate(usage_rows)
+                            if row["agent"] == selected
+                        ),
+                        self.cursor,
+                    )
+                self.cursor = (
+                    max(0, min(self.cursor, len(usage_rows) - 1)) if usage_rows else 0
+                )
+        self._render_needed.set()
 
     def _clamp_cursor(self) -> None:
         with self._lock:
@@ -138,11 +193,11 @@ class Dashboard:
                 n = len(self._usage_rows)
             else:
                 n = len(self._rows)
-        self.cursor = max(0, min(self.cursor, n - 1)) if n else 0
+            self.cursor = max(0, min(self.cursor, n - 1)) if n else 0
 
-    def _select(self, row_count: int, index: int) -> Text:
-        prefix = "▸ " if index == self.cursor else "  "
-        style = "bold" if index == self.cursor else ""
+    def _select(self, index: int, cursor: int) -> Text:
+        prefix = "▸ " if index == cursor else "  "
+        style = "bold" if index == cursor else ""
         return Text(prefix, style=style)
 
     def render(self) -> Group:
@@ -152,10 +207,14 @@ class Dashboard:
 
     def _header(self, title: str, summary: str) -> Panel:
         last_scan = self._last_scan
-        keys = t("↑↓ select · ←→ view · Enter pop · n note · c color · d details · q quit")
-        scan_txt = t("scanning…") if self._scanning else t(
-            "scan: {time}",
-            time=last_scan.strftime("%H:%M:%S") if last_scan else "—",
+        keys = t("↑↓ · b blocked · ←→ · Enter · q")
+        scan_txt = (
+            t("scanning…")
+            if self._scanning
+            else t(
+                "scan: {time}",
+                time=last_scan.strftime("%H:%M:%S") if last_scan else "—",
+            )
         )
         return Panel(
             t("[bold]termiX[/] — {title}  {summary}", title=title, summary=summary),
@@ -169,9 +228,12 @@ class Dashboard:
     def _render_terminals(self) -> Group:
         with self._lock:
             rows = list(self._rows)
-            errors = list(self._errors)
+            errors = list(self._session_errors + self._usage_errors)
+            cursor = min(self.cursor, len(rows) - 1) if rows else 0
 
-        table = Table(box=box.SIMPLE_HEAVY, expand=True, pad_edge=False, header_style="bold")
+        table = Table(
+            box=box.SIMPLE_HEAVY, expand=True, pad_edge=False, header_style="bold"
+        )
         for col, min_w, wrap in [
             ("", 3, False),
             (t("agent"), 6, False),
@@ -190,13 +252,15 @@ class Dashboard:
         working = blocked = 0
         for i, s in enumerate(rows):
             style, label = STATUS_STYLE.get(s.status, ("white", s.status))
-            if s.status == "working":
+            if s.status in ACTIVE and s.presence == "live":
                 working += 1
-            elif s.status == "blocked":
+            elif s.status in ATTENTION and s.presence == "live":
                 blocked += 1
             status = Text(f"{STATUS_GLYPH.get(s.status, '·')} {t(label)}", style=style)
             if s.detail:
                 status.append(f" ({s.detail[:12]})", style="dim")
+            if s.presence == "unverified":
+                status.append(" · " + t("Runtime association unverified"), style="dim")
             model = (s.model or "—")[:16]
             dir_txt = s.cwd or "—"
             if len(dir_txt) > 56:
@@ -207,7 +271,7 @@ class Dashboard:
             agent_txt = Text(s.agent, style=self._agent_style(s.agent))
             if self._notes.get(self._note_key_for(s)):
                 agent_txt.append(" ✎", style="yellow")
-            table.add_row(self._select(len(rows), i), agent_txt, status, model, directory)
+            table.add_row(self._select(i, cursor), agent_txt, status, model, directory)
 
         if not rows:
             msg = (
@@ -219,18 +283,20 @@ class Dashboard:
 
         total = len(rows)
         summary = t(
-            "[green]{working} working[/] · [yellow]{blocked} blocked[/] · [cyan]{running} running[/]",
+            "{working} active · {blocked} need you · {running} other recent",
             working=working,
             blocked=blocked,
             running=total - working - blocked,
         )
         header = self._header(t("open terminals"), summary)
         footer = self._footer(
-            t("only sessions open right now · [bold]Enter[/] = pop · [bold]n[/] = note · [bold]c[/] = color · [bold]d[/] = details")
+            t(
+                "Recent sessions · Enter locate · b attention · n note · c color · d details"
+            )
         )
         parts: list = [header, table, footer]
         if self._note_edit is not None and rows:
-            s = rows[self.cursor]
+            s = rows[cursor]
             prompt = Text.from_markup(
                 t(
                     "✎ note for [bold]{agent}[/] ({cwd}): ",
@@ -251,7 +317,7 @@ class Dashboard:
         if self._pop_status:
             parts.append(Text(f"↗ {self._pop_status}", style="blue"))
         if self.detail and rows:
-            s = rows[self.cursor]
+            s = rows[cursor]
             parts.append(self._session_detail_panel(s))
         for err in errors:
             parts.append(Text(f"⚠ {err}", style="red"))
@@ -285,9 +351,12 @@ class Dashboard:
     def _render_usage(self) -> Group:
         with self._lock:
             usage_rows = list(self._usage_rows)
-            errors = list(self._errors)
+            errors = list(self._session_errors + self._usage_errors)
+            cursor = min(self.cursor, len(usage_rows) - 1) if usage_rows else 0
 
-        table = Table(box=box.SIMPLE_HEAVY, expand=True, pad_edge=False, header_style="bold")
+        table = Table(
+            box=box.SIMPLE_HEAVY, expand=True, pad_edge=False, header_style="bold"
+        )
         for col, min_w in [
             ("", 3),
             (t("agent"), 8),
@@ -310,13 +379,18 @@ class Dashboard:
                 for wi, w in enumerate(quota.windows):
                     if wi:
                         limits.append("\n")
-                    limits.append(_usage_window_cell(w))
+                    limits.append(_usage_window_cell(w, quota.limited))
             else:
-                limits = Text(t("no official quota data (no subscription / api key)"), style="dim")
+                limits = Text(
+                    t(quota.reason) if quota and quota.reason else t("Unavailable"),
+                    style="dim",
+                )
+            if quota and quota.availability == "stale":
+                limits.append(" · " + t("Stale"), style="yellow")
             plan = quota.plan if quota and quota.plan else "—"
             provider = quota.provider if quota else t("no subscription")
             cells = [
-                self._select(len(usage_rows), i),
+                self._select(i, cursor),
                 Text(row["agent"], style=self._agent_style(row["agent"])),
                 Text(provider, style="dim"),
                 plan,
@@ -329,11 +403,13 @@ class Dashboard:
             t("official subscription quota per account — 5h / weekly / monthly"),
         )
         footer = self._footer(
-            t("OK <80% · NEAR 80–90% · HIT ≥90% — official provider APIs only · [bold]←[/] = terminals view")
+            t(
+                "80% / 90% are warning thresholds, not proof of a rate limit · ← sessions"
+            )
         )
         parts: list = [header, table, footer]
         if self.detail and usage_rows:
-            parts.append(self._usage_detail_panel(usage_rows[self.cursor]))
+            parts.append(self._usage_detail_panel(usage_rows[cursor]))
         for err in errors:
             parts.append(Text(f"⚠ {err}", style="red"))
         return Group(*parts)
@@ -351,7 +427,9 @@ class Dashboard:
                     line += f"  · {w.countdown}"
                 lines.append(line)
         else:
-            lines.append(f"{_label('provider:')}{t('no official subscription quota available')}")
+            lines.append(
+                f"{_label('provider:')}{t('no official subscription quota available')}"
+            )
         return Panel(
             "\n".join(lines),
             title=t("quota breakdown"),
@@ -360,42 +438,25 @@ class Dashboard:
         )
 
     def _pop_terminal(self, s: SessionInfo) -> str:
-        if not s.cwd or not Path(s.cwd).exists():
-            return t("no working directory — cannot open")
         try:
-            from ..core.win32 import find_terminal_window, focus_window, pid_cwd_matches
-        except ImportError:
-            find_terminal_window = focus_window = pid_cwd_matches = None
-        folder = Path(s.cwd).name
-        if find_terminal_window:
-            pid = s.pid if pid_cwd_matches(s.pid, s.cwd) else None
-            hwnd = find_terminal_window(strong=[folder], weak=[s.agent], agent_pid=pid)
-            if hwnd:
-                try:
-                    focus_window(hwnd)
-                    return t("focused existing {agent} window ({folder})", agent=s.agent, folder=folder)
-                except Exception as e:
-                    return t("failed to focus window: {err}", err=e)
-        wt = _find_wt()
-        if not wt:
-            return t("windows terminal (wt) not found")
-        cmd = s.resume_cmd or [s.agent]
-        try:
-            subprocess.Popen(
-                [wt, "-w", "new", "-d", s.cwd, *cmd],
-                creationflags=subprocess.CREATE_NEW_CONSOLE,
-            )
-            return t("popped {agent} → {cwd}", agent=s.agent, cwd=s.cwd)
-        except Exception as e:
-            return t("failed to open terminal: {err}", err=e)
+            return t(TerminalLocator(self.cfg).focus(s).message)
+        except Exception as exc:
+            return t("failed to focus window: {err}", err=type(exc).__name__)
 
     def _note_key_for(self, s: SessionInfo) -> str:
-        return f"{s.agent}::{s.cwd or ''}"
+        import json
+
+        key = json.dumps(s.key, ensure_ascii=False)
+        legacy = f"{s.agent}::{s.cwd or ''}"
+        if key not in self._notes and legacy in self._notes:
+            self._notes[key] = self._notes[legacy]
+        return key
 
     def _start_note_edit(self) -> None:
-        if self.view != "terminals" or not self._rows:
-            return
-        s = self._rows[self.cursor]
+        with self._lock:
+            if self.view != "terminals" or not self._rows:
+                return
+            s = self._rows[min(self.cursor, len(self._rows) - 1)]
         self._note_key = self._note_key_for(s)
         self._note_edit = self._notes.get(self._note_key, "")
 
@@ -418,10 +479,12 @@ class Dashboard:
 
     def _cycle_agent_color(self) -> None:
         agent = None
-        if self.view == "terminals" and self._rows:
-            agent = self._rows[self.cursor].agent
-        elif self.view == "usage" and self._usage_rows:
-            agent = self._usage_rows[self.cursor]["agent"]
+        with self._lock:
+            if self.view == "terminals" and self._rows:
+                agent = self._rows[min(self.cursor, len(self._rows) - 1)].agent
+            elif self.view == "usage" and self._usage_rows:
+                index = min(self.cursor, len(self._usage_rows) - 1)
+                agent = self._usage_rows[index]["agent"]
         if not agent:
             return
         cfg_colors = self.cfg.get("colors", {}) or {}
@@ -431,6 +494,10 @@ class Dashboard:
     def _agent_style(self, agent: str) -> str:
         cfg_colors = self.cfg.get("colors", {}) or {}
         return agent_color(agent, self._colors, cfg_colors)
+
+    def _put_key(self, key) -> None:
+        self._keys.put(key)
+        self._render_needed.set()
 
     def _key_listener(self) -> None:
         try:
@@ -445,40 +512,40 @@ class Dashboard:
                     if self._note_edit is not None:
                         continue
                     if ext == b"H":
-                        self._keys.put("up")
+                        self._put_key("up")
                     elif ext == b"P":
-                        self._keys.put("down")
+                        self._put_key("down")
                     elif ext == b"K":
-                        self._keys.put("left")
+                        self._put_key("left")
                     elif ext == b"M":
-                        self._keys.put("right")
+                        self._put_key("right")
                 elif self._note_edit is not None:
                     if ch in (b"\r", b"\n"):
-                        self._keys.put("note-save")
+                        self._put_key("note-save")
                     elif ch in (b"\x08", b"\x7f"):
-                        self._keys.put("note-bs")
+                        self._put_key("note-bs")
                     elif ch == b"\x1b":
-                        self._keys.put("note-cancel")
+                        self._put_key("note-cancel")
                     elif 32 <= ch[0] < 127:
-                        self._keys.put(("note-char", chr(ch[0])))
+                        self._put_key(("note-char", chr(ch[0])))
                 elif ch in (b"\r", b"\n"):
-                    self._keys.put("enter")
+                    self._put_key("enter")
                 elif ch in (b"q", b"Q"):
                     self._stop.set()
+                    self._render_needed.set()
                     return
                 elif ch in (b"n", b"N"):
-                    self._keys.put("note")
+                    self._put_key("note")
                 elif ch in (b"c", b"C"):
-                    self._keys.put("color")
+                    self._put_key("color")
                 elif ch in (b"d", b"D"):
-                    self._keys.put("d")
+                    self._put_key("d")
+                elif ch in (b"b", b"B"):
+                    self._put_key("blocked")
             time.sleep(0.02)
 
-    def _handle_keys(self) -> None:
-        if self.view == "usage":
-            n = len(self._usage_rows)
-        else:
-            n = len(self._rows)
+    def _handle_keys(self) -> bool:
+        changed = False
         while True:
             try:
                 key = self._keys.get_nowait()
@@ -493,57 +560,119 @@ class Dashboard:
                     self._note_edit = self._note_edit[:-1]
                 elif isinstance(key, tuple) and key[0] == "note-char":
                     self._note_edit += key[1]
+                changed = True
                 continue
             if key == "up":
-                self.cursor = max(0, self.cursor - 1)
+                with self._lock:
+                    self.cursor = max(0, self.cursor - 1)
+                changed = True
             elif key == "down":
-                self.cursor = min(n - 1, self.cursor + 1) if n else 0
+                with self._lock:
+                    n = (
+                        len(self._usage_rows)
+                        if self.view == "usage"
+                        else len(self._rows)
+                    )
+                    self.cursor = min(n - 1, self.cursor + 1) if n else 0
+                changed = True
             elif key == "left":
-                self.view = "terminals"
-                self.detail = False
-                self.cursor = 0
+                with self._lock:
+                    self.view = "terminals"
+                    self.detail = False
+                    self.cursor = 0
+                changed = True
             elif key == "right":
-                self.view = "usage"
-                self.detail = False
-                self.cursor = 0
+                with self._lock:
+                    self.view = "usage"
+                    self.detail = False
+                    self.cursor = 0
+                changed = True
             elif key == "enter":
-                if self.view == "terminals" and self._rows:
-                    self._pop_status = self._pop_terminal(self._rows[self.cursor])
+                with self._lock:
+                    rows = list(self._rows)
+                if self.view == "terminals" and rows:
+                    self._pop_status = self._pop_terminal(
+                        rows[min(self.cursor, len(rows) - 1)]
+                    )
                 else:
                     self.detail = not self.detail
+                changed = True
             elif key == "d":
                 self.detail = not self.detail
+                changed = True
             elif key == "note":
                 self._start_note_edit()
+                changed = True
             elif key == "color":
                 self._cycle_agent_color()
+                changed = True
+            elif key == "blocked" and self.view == "terminals":
+                with self._lock:
+                    blocked = [
+                        i
+                        for i, row in enumerate(self._rows)
+                        if row.status == "blocked"
+                        or (row.status in ATTENTION and row.presence == "live")
+                    ]
+                    if blocked:
+                        self.cursor = next(
+                            (i for i in blocked if i > self.cursor), blocked[0]
+                        )
+                        changed = True
+        return changed
 
     def _scanner_loop(self) -> None:
         while not self._stop.is_set():
             self._scanning = True
+            self._render_needed.set()
             try:
-                self.scan()
+                self.scan_sessions()
             except Exception as e:
                 with self._lock:
-                    self._errors = [str(e)]
+                    self._session_errors = [str(e)]
             self._scanning = False
-            time.sleep(self.cfg.get("refresh_sec", 3))
+            self._render_needed.set()
+            try:
+                interval = max(0.1, float(self.cfg.get("refresh_sec", 3)))
+            except (TypeError, ValueError):
+                interval = 3.0
+            self._stop.wait(interval)
+
+    def _quota_loop(self) -> None:
+        while not self._stop.is_set():
+            try:
+                self.scan_usage()
+            except Exception as e:
+                with self._lock:
+                    self._usage_errors = [str(e)]
+                self._render_needed.set()
+            try:
+                interval = max(1.0, float(self.cfg.get("quota_refresh_sec", 120)))
+            except (TypeError, ValueError):
+                interval = 120.0
+            self._stop.wait(interval)
 
     def run(self) -> None:
         self._scanning = True
         scanner = threading.Thread(target=self._scanner_loop, daemon=True)
         scanner.start()
+        quota_scanner = threading.Thread(target=self._quota_loop, daemon=True)
+        quota_scanner.start()
         listener = threading.Thread(target=self._key_listener, daemon=True)
         listener.start()
-        with Live(self.render(), console=self.console, refresh_per_second=10) as live:
+        with Live(self.render(), console=self.console, auto_refresh=False) as live:
             while not self._stop.is_set():
-                self._handle_keys()
-                live.update(self.render())
-                time.sleep(0.05)
+                signaled = self._render_needed.wait(0.05)
+                if signaled:
+                    self._render_needed.clear()
+                changed = self._handle_keys()
+                if signaled or changed:
+                    live.update(self.render(), refresh=True)
         self.console.print(t("[dim]bye[/]"))
 
 
 def run() -> None:
     cfg = load_config()
     from ..agents import ADAPTERS
+
     Dashboard(ADAPTERS, cfg).run()

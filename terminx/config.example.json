@@ -1,12 +1,10 @@
 {
   "lang": "auto",
   "refresh_sec": 3,
-  "working_threshold_sec": 60,
-  "blocked_threshold_sec": 600,
+  "quota_refresh_sec": 120,
   "show_recent_hours": 24,
-  "max_rows_per_agent": 6,
-  "paths": {},
-  "kimi_api_key": "",
-  "codex_usage_url": "https://chatgpt.com/backend-api",
-  "kimi_usage_url": "https://api.kimi.com/coding/v1"
+  "max_rows_per_agent": 100,
+  "kimi_start_server": true,
+  "kimi_server_port": 58627,
+  "paths": {}
 }

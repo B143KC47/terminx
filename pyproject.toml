@@ -1,15 +1,16 @@
 [build-system]
-requires = ["setuptools>=64"]
+requires = ["setuptools>=77,<85"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "terminx"
-version = "0.1.0"
-description = "Terminal dashboard for your CLI coding agents — Codex, OpenCode, Claude Code, Kimi in one view"
+dynamic = ["version"]
+description = "Windows sidebar and terminal dashboard for AI CLI sessions"
 readme = "README.md"
-requires-python = ">=3.10"
-license = { text = "MIT" }
-authors = [{ name = "BlackC4T" }]
+requires-python = ">=3.11"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "BlackCat", email = "ltu46166@gmail.com" }]
 keywords = [
     "cli",
     "terminal",
@@ -19,6 +20,8 @@ keywords = [
     "claude-code",
     "opencode",
     "kimi",
+    "grok",
+    "sidebar",
     "ai-agents",
     "monitoring",
     "quota",
@@ -27,16 +30,42 @@ classifiers = [
     "Development Status :: 3 - Alpha",
     "Environment :: Console",
     "Intended Audience :: Developers",
-    "License :: OSI Approved :: MIT License",
     "Operating System :: Microsoft :: Windows",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Topic :: Terminals",
     "Topic :: Utilities",
 ]
 dependencies = ["rich>=13.0", "psutil>=5.9"]
+
+[project.optional-dependencies]
+desktop = ["PySide6>=6.8,<7", "tomlkit>=0.13,<1"]
+dev = ["build>=1.2,<2", "coverage>=7.6,<8", "ruff>=0.16,<1", "pip-audit>=2.10,<3"]
+package = ["pyinstaller>=6.22,<7"]
+
+[tool.setuptools.dynamic]
+version = {attr = "terminx.__version__"}
+
+[tool.ruff]
+target-version = "py311"
+extension = {spec = "python"}
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "I"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/native*.py" = ["E402"]
+"tests/sidebar*.py" = ["E402"]
+
+[tool.coverage.run]
+source = ["terminx"]
+
+[tool.coverage.report]
+show_missing = true
+
+[project.gui-scripts]
+terminx-sidebar = "terminx.ui.sidebar:main"
 
 [project.scripts]
 terminx = "terminx.__main__:main"
